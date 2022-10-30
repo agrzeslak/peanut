@@ -1,4 +1,4 @@
-use crate::{register::Register, memory::Address};
+use crate::{memory::Address, register::Register};
 
 pub enum Operand<'a> {
     Immediate(Address),
@@ -11,4 +11,3 @@ pub enum Instruction<'a, 'b> {
     Pop(Operand<'a>),
     Push(Operand<'a>),
 }
-
