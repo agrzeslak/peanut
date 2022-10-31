@@ -1,8 +1,45 @@
+use std::u32;
+
 use bitmaps::Bitmap;
+use paste::paste;
 
-use crate::memory::Address;
+trait HighLowBytes32 {
+    fn get_high(&self) -> u16;
+    fn set_high(&mut self, value: u16);
+    fn get_low_high(&self) -> u8;
+    fn set_low_high(&mut self, value: u8);
+    fn get_low_low(&self) -> u8;
+    fn set_low_low(&mut self, value: u8);
+}
 
-pub struct GeneralPurposeRegister(u32);
+impl HighLowBytes32 for u32 {
+    fn get_high(&self) -> u16 {
+        (*self >> 16) as u16
+    }
+
+    fn set_high(&mut self, value: u16) {
+        *self &= 0x0000ffff;
+        *self |= (value as u32) << 16
+    }
+
+    fn get_low_high(&self) -> u8 {
+        (*self >> 8) as u8
+    }
+
+    fn set_low_high(&mut self, value: u8) {
+        *self &= 0xffff00ff;
+        *self |= (value as u32) << 8
+    }
+
+    fn get_low_low(&self) -> u8 {
+        *self as u8
+    }
+
+    fn set_low_low(&mut self, value: u8) {
+        *self &= 0xffffff00;
+        *self |= value as u32;
+    }
+}
 
 pub enum CurrentPrivilegeLevel {
     CPL0,
@@ -15,9 +52,10 @@ pub enum CurrentPrivilegeLevel {
 /// 0       0x0001  CF              Carry Flag      Status      CY (Carry)      NC (No Carry)
 /// 1       0x0002  Reserved, always 1 in EFLAGS.
 /// 2       0x0004  PF              Parity Flag     Status      PE (Parity Even)
-pub struct EflagsRegister(Bitmap<64>);
+#[derive(Default)]
+pub struct Eflags(Bitmap<32>);
 
-impl EflagsRegister {
+impl Eflags {
     // FIXME: Make this a macro.
     pub fn get_cf(&self) -> bool {
         self.0.get(0)
@@ -187,11 +225,137 @@ impl EflagsRegister {
     }
 }
 
-pub struct SegmentRegister(u16);
-pub struct InstructionPointerRegister(Address);
-pub enum Register {
-    Eflags(EflagsRegister),
-    Eip(InstructionPointerRegister),
-    GeneralPurpose(GeneralPurposeRegister),
-    Segment(SegmentRegister),
+#[derive(Default)]
+pub struct Registers {
+    eax: u32,
+    ebx: u32,
+    ecx: u32,
+    edx: u32,
+    edi: u32,
+    esi: u32,
+    ebp: u32,
+    esp: u32,
+    eflags: Eflags,
+    eip: u32,
+    cs: u16,
+    ds: u16,
+    es: u16,
+    fs: u16,
+    gs: u16,
+    ss: u16,
+}
+
+macro_rules! create_general_register_accessors {
+    ($register_letter:ident) => {
+        paste! {
+            pub fn [<get_e $register_letter x>](&self) -> u32 {
+                self.[<e $register_letter x>]
+            }
+
+            pub fn [<set_e $register_letter x>](&mut self, value: u32) {
+                self.[<e $register_letter x>] = value;
+            }
+
+            pub fn [<get_ $register_letter x>](&self) -> u16 {
+                self.[<e $register_letter x>].get_high()
+            }
+
+            pub fn [<set_ $register_letter x>](&mut self, value: u16) {
+                self.[<e $register_letter x>].set_high(value)
+            }
+
+            pub fn [<get_ $register_letter h>](&self) -> u8 {
+                self.[<e $register_letter x>].get_low_high()
+            }
+
+            pub fn [<set_ $register_letter h>](&mut self, value: u8) {
+                self.[<e $register_letter x>].set_low_high(value);
+            }
+
+            pub fn [<get_ $register_letter l>](&self) -> u8 {
+                self.[<e $register_letter x>].get_low_low()
+            }
+
+            pub fn [<set_ $register_letter l>](&mut self, value: u8) {
+                self.[<e $register_letter x>].set_low_low(value);
+            }
+        }
+    };
+}
+impl Registers {
+    create_general_register_accessors!(a);
+    create_general_register_accessors!(b);
+    create_general_register_accessors!(c);
+    create_general_register_accessors!(d);
+
+    pub fn get_edi(&self) -> u32 {
+        self.edi
+    }
+
+    pub fn set_edi(&mut self, value: u32) {
+        self.edi = value
+    }
+
+    pub fn get_esi(&self) -> u32 {
+        self.esi
+    }
+
+    pub fn set_esi(&mut self, value: u32) {
+        self.esi = value
+    }
+
+    pub fn get_ebp(&self) -> u32 {
+        self.ebp
+    }
+    pub fn set_ebp(&mut self, value: u32) {
+        self.ebp = value;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tests the getters and setters of a general register. `$register_letter` is expanded to form
+    /// `e $register_letter x`, e.g. eax.
+    macro_rules! test_general_register_get_and_set {
+        ($register_letter:ident) => {
+            paste! {
+                let mut registers = Registers::default();
+                registers.[<set_e $register_letter x>](0xdeadc0de);
+                assert_eq!(registers.[<get_e $register_letter x>](), 0xdeadc0de);
+                assert_eq!(registers.[<get_ $register_letter x>](), 0xdead);
+                assert_eq!(registers.[<get_ $register_letter h>](), 0xc0);
+                assert_eq!(registers.[<get_ $register_letter l>](), 0xde);
+
+                registers.[<set_ $register_letter x>](0xc0de);
+                registers.[<set_ $register_letter h>](0xb3);
+                registers.[<set_ $register_letter l>](0x3f);
+                assert_eq!(registers.[<get_e $register_letter x>](), 0xc0deb33f as u32);
+                assert_eq!(registers.[<get_ $register_letter x>](), 0xc0de);
+                assert_eq!(registers.[<get_ $register_letter h>](), 0xb3);
+                assert_eq!(registers.[<get_ $register_letter l>](), 0x3f);
+            }
+        };
+    }
+
+    #[test]
+    fn eax_get_and_set() {
+        test_general_register_get_and_set!(a);
+    }
+
+    #[test]
+    fn ebx_get_and_set() {
+        test_general_register_get_and_set!(b);
+    }
+
+    #[test]
+    fn ecx_get_and_set() {
+        test_general_register_get_and_set!(c);
+    }
+
+    #[test]
+    fn edx_get_and_set() {
+        test_general_register_get_and_set!(d);
+    }
 }
