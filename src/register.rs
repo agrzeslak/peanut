@@ -225,6 +225,25 @@ impl Eflags {
     }
 }
 
+pub enum Register {
+    Eax,
+    Ebx,
+    Ecx,
+    Edx,
+    Edi,
+    Esi,
+    Ebp,
+    Esp,
+    Eflags,
+    Eip,
+    Cs,
+    Ds,
+    Es,
+    Fs,
+    Gs,
+    Ss,
+}
+
 #[derive(Default)]
 pub struct Registers {
     eax: u32,
@@ -318,7 +337,7 @@ mod tests {
 
     /// Tests the getters and setters of a general register. `$register_letter` is expanded to form
     /// `e $register_letter x`, e.g. eax.
-    macro_rules! test_general_register_get_and_set {
+    macro_rules! test_general_register_accessors {
         ($register_letter:ident) => {
             paste! {
                 let mut registers = Registers::default();
@@ -341,21 +360,21 @@ mod tests {
 
     #[test]
     fn eax_get_and_set() {
-        test_general_register_get_and_set!(a);
+        test_general_register_accessors!(a);
     }
 
     #[test]
     fn ebx_get_and_set() {
-        test_general_register_get_and_set!(b);
+        test_general_register_accessors!(b);
     }
 
     #[test]
     fn ecx_get_and_set() {
-        test_general_register_get_and_set!(c);
+        test_general_register_accessors!(c);
     }
 
     #[test]
     fn edx_get_and_set() {
-        test_general_register_get_and_set!(d);
+        test_general_register_accessors!(d);
     }
 }
