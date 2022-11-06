@@ -1,5 +1,7 @@
 use crate::{
-    cpu::{self, Cpu},
+    cpu::Cpu,
+    error::Error,
+    parser::{IntelInstructionStrParser},
     register::Register,
 };
 
@@ -7,12 +9,9 @@ use crate::{
 /// should be performed.
 #[derive(Debug, PartialEq, Eq)]
 struct InstructionSignature<'a> {
-    op_code: u32,
+    opcode: u32,
     mnemonic: &'a str,
-    operand1: Operands,
-    operand2: Operands,
-    operand3: Operands,
-    operand4: Operands,
+    operands: Vec<Operand>,
     // TODO: According to
     // https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/x86-instructions, "Unless
     // otherwise noted, ... you cannot choose memory for both source and destination". Look into
@@ -110,6 +109,7 @@ enum OperandFormat {
     Imm8Eax,
     Imm8Imm16,
     Reg8Cl,
+    None,
 }
 
 type CpuFunction = fn(&mut Cpu, &Instruction);
@@ -130,13 +130,13 @@ impl From<(OperandFormat, CpuFunction)> for OperandFunctionMap {
 
 /// A valid instruction's signature, which may be matched against to determine what x86 instruction
 /// should be performed.
-struct InstructionDescriptor<'a> {
-    pub op_code: u32,
-    pub mnemonic: &'a str,
-    pub operand_function_map_8: Option<OperandFunctionMap>,
-    pub operand_function_map_16: Option<OperandFunctionMap>,
-    pub operand_function_map_32: Option<OperandFunctionMap>,
-    pub lock_prefix: bool,
+pub(crate) struct InstructionDescriptor<'a> {
+    opcode: u32,
+    mnemonic: &'a str,
+    operand_function_map_8: Option<OperandFunctionMap>,
+    operand_function_map_16: Option<OperandFunctionMap>,
+    operand_function_map_32: Option<OperandFunctionMap>,
+    lock_prefix: bool,
 }
 
 macro_rules! expand_operand_function_mapping {
@@ -153,7 +153,7 @@ macro_rules! expand_operand_function_mapping {
 
 macro_rules! build {
     (
-        $op_code:literal,
+        $opcode:literal,
         $mnemonic:literal,
         ($($mapping_8:tt)*),
         ($($mapping_16:tt)*),
@@ -161,7 +161,7 @@ macro_rules! build {
         $lock_prefix:literal
     ) => {
         InstructionDescriptor {
-            op_code: $op_code,
+            opcode: $opcode,
             mnemonic: $mnemonic,
             operand_function_map_8: expand_operand_function_mapping!($($mapping_8)*),
             operand_function_map_16: expand_operand_function_mapping!($($mapping_16)*),
@@ -171,52 +171,179 @@ macro_rules! build {
     }
 }
 
-const INSTRUCTION_DESCRIPTORS: [InstructionDescriptor; 255] = [
+// TODO: Hash maps for op code and mnemonic look-ups.
+const INSTRUCTION_DESCRIPTORS: [InstructionDescriptor; 254] = [
     build!(0x00, "ADD", (Rm8Reg8, add_rm8_reg8), (), (), true),
-    build!(0x01, "ADD", (), (Rm16Reg16, add_rm16_reg16), (Rm32Reg32, add_rm32_reg32), true),
+    build!(
+        0x01,
+        "ADD",
+        (),
+        (Rm16Reg16, add_rm16_reg16),
+        (Rm32Reg32, add_rm32_reg32),
+        true
+    ),
     build!(0x02, "ADD", (Reg8Rm8, add_reg8_rm8), (), (), false),
-    build!(0x03, "ADD", (), (Reg16Rm16, add_reg16_rm16), (Reg32Rm32, add_reg32_rm32), false),
+    build!(
+        0x03,
+        "ADD",
+        (),
+        (Reg16Rm16, add_reg16_rm16),
+        (Reg32Rm32, add_reg32_rm32),
+        false
+    ),
     build!(0x04, "ADD", (AlImm8, add_al_imm8), (), (), false),
-    build!(0x05, "ADD", (), (AxImm16, add_ax_imm16), (EaxImm32, add_eax_imm32), false),
+    build!(
+        0x05,
+        "ADD",
+        (),
+        (AxImm16, add_ax_imm16),
+        (EaxImm32, add_eax_imm32),
+        false
+    ),
     build!(0x06, "PUSH", (), (Es, push_es), (), false),
     build!(0x07, "POP", (), (Es, pop_es), (), false),
     build!(0x08, "OR", (Rm8Reg8, or_rm8_reg8), (), (), true),
-    build!(0x09, "OR", (), (Rm16Reg16, or_rm16_reg16), (Rm32Reg32, or_rm32_reg32), true),
+    build!(
+        0x09,
+        "OR",
+        (),
+        (Rm16Reg16, or_rm16_reg16),
+        (Rm32Reg32, or_rm32_reg32),
+        true
+    ),
     build!(0x0a, "OR", (Reg8Rm8, or_reg8_rm8), (), (), false),
-    build!(0x0b, "OR", (), (Reg16Rm16, or_reg16_rm16), (Reg32Rm32, or_reg32_rm32), false),
+    build!(
+        0x0b,
+        "OR",
+        (),
+        (Reg16Rm16, or_reg16_rm16),
+        (Reg32Rm32, or_reg32_rm32),
+        false
+    ),
     build!(0x0c, "OR", (AlImm8, or_al_imm8), (), (), false),
-    build!(0x0d, "OR", (), (AxImm16, or_ax_imm16), (EaxImm32, or_eax_imm32), false),
+    build!(
+        0x0d,
+        "OR",
+        (),
+        (AxImm16, or_ax_imm16),
+        (EaxImm32, or_eax_imm32),
+        false
+    ),
     build!(0x0e, "PUSH", (), (Cs, push_cs), (), false),
     build!(0x10, "ADC", (Rm8Reg8, adc_rm8_reg8), (), (), true),
-    build!(0x11, "ADC", (), (Rm16Reg16, adc_rm16_reg16), (Rm32Reg32, adc_rm32_reg32), true),
+    build!(
+        0x11,
+        "ADC",
+        (),
+        (Rm16Reg16, adc_rm16_reg16),
+        (Rm32Reg32, adc_rm32_reg32),
+        true
+    ),
     build!(0x12, "ADC", (Reg8Rm8, adc_reg8_rm8), (), (), false),
-    build!(0x13, "ADC", (), (Reg16Rm16, adc_reg16_rm16), (Reg32Rm32, adc_reg32_rm32), false),
+    build!(
+        0x13,
+        "ADC",
+        (),
+        (Reg16Rm16, adc_reg16_rm16),
+        (Reg32Rm32, adc_reg32_rm32),
+        false
+    ),
     build!(0x14, "ADC", (AlImm8, adc_al_imm8), (), (), false),
-    build!(0x15, "ADC", (), (AxImm16, adc_ax_imm16), (EaxImm32, adc_eax_imm32), false),
+    build!(
+        0x15,
+        "ADC",
+        (),
+        (AxImm16, adc_ax_imm16),
+        (EaxImm32, adc_eax_imm32),
+        false
+    ),
     build!(0x16, "PUSH", (), (Ss, push_ss), (), false),
     build!(0x17, "POP", (), (Ss, pop_ss), (), false),
     build!(0x18, "SBB", (Rm8Reg8, sbb_rm8_reg8), (), (), true),
-    build!(0x19, "SBB", (), (Rm16Reg16, sbb_rm16_reg16), (Rm32Reg32, sbb_rm32_reg32), true),
+    build!(
+        0x19,
+        "SBB",
+        (),
+        (Rm16Reg16, sbb_rm16_reg16),
+        (Rm32Reg32, sbb_rm32_reg32),
+        true
+    ),
     build!(0x1a, "SBB", (Reg8Rm8, sbb_reg8_rm8), (), (), false),
-    build!(0x1b, "SBB", (), (Reg16Rm16, sbb_reg16_rm16), (Reg32Rm32, sbb_reg32_rm32), false),
+    build!(
+        0x1b,
+        "SBB",
+        (),
+        (Reg16Rm16, sbb_reg16_rm16),
+        (Reg32Rm32, sbb_reg32_rm32),
+        false
+    ),
     build!(0x1c, "SBB", (AlImm8, sbb_al_imm8), (), (), false),
-    build!(0x1d, "SBB", (), (AxImm16, sbb_ax_imm16), (EaxImm32, sbb_eax_imm32), false),
+    build!(
+        0x1d,
+        "SBB",
+        (),
+        (AxImm16, sbb_ax_imm16),
+        (EaxImm32, sbb_eax_imm32),
+        false
+    ),
     build!(0x1e, "PUSH", (), (Ds, push_ds), (), false),
     build!(0x1f, "POP", (), (Ds, pop_ds), (), false),
-    build!(0x20, "", (), (), (), false),
-    build!(0x21, "", (), (), (), false),
-    build!(0x22, "", (), (), (), false),
-    build!(0x23, "", (), (), (), false),
-    build!(0x24, "", (), (), (), false),
-    build!(0x25, "", (), (), (), false),
-    build!(0x26, "", (), (), (), false),
-    build!(0x27, "", (), (), (), false),
-    build!(0x28, "", (), (), (), false),
-    build!(0x29, "", (), (), (), false),
-    build!(0x2a, "", (), (), (), false),
-    build!(0x2b, "", (), (), (), false),
-    build!(0x2c, "", (), (), (), false),
-    build!(0x2d, "", (), (), (), false),
+    build!(0x20, "AND", (Rm8Reg8, and_rm8_reg8), (), (), true),
+    build!(
+        0x21,
+        "AND",
+        (),
+        (Rm16Reg16, and_rm16_reg16),
+        (Rm32Reg32, and_rm32_reg32),
+        true
+    ),
+    build!(0x22, "AND", (Reg8Rm8, and_reg8_rm8), (), (), false),
+    build!(
+        0x23,
+        "AND",
+        (),
+        (Reg16Rm16, and_reg16_rm16),
+        (Reg32Rm32, and_reg32_rm32),
+        false
+    ),
+    build!(0x24, "AND", (AlImm8, and_al_imm8), (), (), false),
+    build!(
+        0x25,
+        "AND",
+        (),
+        (AxImm16, and_ax_imm16),
+        (EaxImm32, and_eax_imm32),
+        false
+    ),
+    build!(0x26, "ES", (), (None, es), (), false),
+    build!(0x27, "DAA", (None, daa), (), (), false),
+    build!(0x28, "SUB", (Rm8Reg8, sub_rm8_reg8), (), (), true),
+    build!(
+        0x29,
+        "SUB",
+        (),
+        (Rm16Reg16, sub_rm16_reg16),
+        (Rm32Reg32, sub_rm32_reg32),
+        true
+    ),
+    build!(0x2a, "SUB", (Reg8Rm8, sub_reg8_rm8), (), (), false),
+    build!(
+        0x2b,
+        "SUB",
+        (),
+        (Reg16Rm16, sub_reg16_rm16),
+        (Reg32Rm32, sub_reg32_rm32),
+        false
+    ),
+    build!(0x2c, "SUB", (AlImm8, sub_al_imm8), (), (), false),
+    build!(
+        0x2d,
+        "SUB",
+        (),
+        (AxImm16, sub_ax_imm16),
+        (EaxImm32, sub_eax_imm32),
+        false
+    ),
     build!(0x2e, "", (), (), (), false),
     build!(0x2f, "", (), (), (), false),
     build!(0x30, "", (), (), (), false),
@@ -428,16 +555,141 @@ const INSTRUCTION_DESCRIPTORS: [InstructionDescriptor; 255] = [
     build!(0xfe, "", (), (), (), false),
 ];
 
-pub enum Operand {
-    Imm8(u8),
-    Imm16(u16),
-    Imm32(u32),
-    M8(u8),
-    M16(u16),
-    M32(u32),
-    R8(Register),
-    R16(Register),
-    R32(Register),
+// FIXME: create hashtable or some other faster lookup method and use that.
+pub(crate) fn lookup_instructions_by_mnemonic(mnemonic: &str) -> Vec<&InstructionDescriptor> {
+    let mnemonic = mnemonic.to_uppercase();
+    INSTRUCTION_DESCRIPTORS
+        .iter()
+        .filter(|i| i.mnemonic == mnemonic)
+        .collect()
+}
+
+pub(crate) fn lookup_instruction_by_opcode(mnemonic: &str) -> Option<InstructionDescriptor> {
+    todo!()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MemoryOperandOperator {
+    Add,
+    Subtract,
+    Multiply,
+}
+
+impl TryFrom<char> for MemoryOperandOperator {
+    type Error = Error;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value {
+            '+' => Ok(MemoryOperandOperator::Add),
+            '-' => Ok(MemoryOperandOperator::Subtract),
+            '*' => Ok(MemoryOperandOperator::Multiply),
+            _ => Err(Error::CannotCovertType(format!(
+                "{} does not correspond to a valid operator",
+                &value
+            ))),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MemoryOperandType {
+    Immediate(u64),
+    Register(Register),
+}
+
+/// Represents a memory reference that is constructed out of a series of operators and operands.
+/// For example:
+///
+/// - [EAX] = [(Add, Register(Eax))]
+/// - [EAX+4*EBX] = [(Add, Register(Eax)), (Add, Immediate(4)), (Multiply, Register(Ebx))]
+///
+/// There cannot be more than two registers used in the formation of a valid memory address,
+/// therefore this is tracked and a push will fail on the third attempt to push a register.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MemoryOperandSequence {
+    sequence: Vec<(MemoryOperandOperator, MemoryOperandType)>,
+    num_registers: u8,
+}
+
+impl MemoryOperandSequence {
+    pub fn new() -> Self {
+        Self {
+            sequence: Vec::new(),
+            num_registers: 0,
+        }
+    }
+
+    pub fn push(
+        &mut self,
+        operator: MemoryOperandOperator,
+        operand: MemoryOperandType,
+    ) -> Result<(), Error> {
+        if let MemoryOperandType::Register(_) = operand {
+            if self.num_registers > 2 {
+                return Err(Error::CannotParseInstruction(
+                    "a memory address cannot be computed from more than two registers".into(),
+                ));
+            }
+            self.num_registers += 1;
+        }
+        self.sequence.push((operator, operand));
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum OperandType {
+    Immediate(u64),
+    Memory(MemoryOperandSequence),
+    Register(Register),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum SizeDirective {
+    Byte,
+    Word,
+    Dword,
+    Qword,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Operand {
+    operand_type: OperandType,
+    size_directive: Option<SizeDirective>,
+}
+
+impl Operand {
+    pub fn new(operand_type: OperandType, size_directive: Option<SizeDirective>) -> Self {
+        Self { operand_type, size_directive }
+    }
+}
+
+pub struct AttInstructionStr<'a>(&'a str);
+pub struct IntelInstructionStr<'a>(&'a str);
+
+pub struct Instruction<'a> {
+    instruction_descriptor: &'a InstructionDescriptor<'a>,
+    operands: Vec<Operand>,
+}
+
+impl TryFrom<AttInstructionStr<'_>> for Instruction<'_> {
+    type Error = Error;
+
+    // FIXME: Should we be implementing try_from for this? It's not a particularly trivial
+    //        conversion and I vaguely rememer that From and TryFrom should only be implemented
+    //        for trivial conversions.
+    fn try_from(instruction: AttInstructionStr) -> Result<Self, Self::Error> {
+        // AttInstructionStrParser::parse(value.0)
+        todo!()
+    }
+}
+
+impl<'a> TryFrom<IntelInstructionStr<'a>> for Instruction<'_> {
+    type Error = Error;
+
+    fn try_from(instruction: IntelInstructionStr) -> Result<Self, Self::Error> {
+        IntelInstructionStrParser::parse(instruction.0)
+    }
 }
 
 #[cfg(test)]

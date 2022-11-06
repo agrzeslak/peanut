@@ -3,6 +3,8 @@ use std::u32;
 use bitmaps::Bitmap;
 use paste::paste;
 
+use crate::error::Error;
+
 trait HighLowBytes32 {
     fn get_high(&self) -> u16;
     fn set_high(&mut self, value: u16);
@@ -225,6 +227,7 @@ impl Eflags {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Register {
     Eax,
     Ebx,
@@ -242,6 +245,32 @@ pub enum Register {
     Fs,
     Gs,
     Ss,
+}
+
+impl TryFrom<&str> for Register {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "eax" => Ok(Register::Eax),
+            "ebx" => Ok(Register::Ebx),
+            "ecx" => Ok(Register::Ecx),
+            "edx" => Ok(Register::Edx),
+            "edi" => Ok(Register::Edi),
+            "esi" => Ok(Register::Esi),
+            "ebp" => Ok(Register::Ebp),
+            "esp" => Ok(Register::Esp),
+            "eflags" => Ok(Register::Eflags),
+            "eip" => Ok(Register::Eip),
+            "cs" => Ok(Register::Cs),
+            "ds" => Ok(Register::Ds),
+            "es" => Ok(Register::Es),
+            "fs" => Ok(Register::Fs),
+            "gs" => Ok(Register::Gs),
+            "ss" => Ok(Register::Ss),
+            _ => Err(Error::CannotCovertType(format!("{} is not a valid register", value)))
+        }
+    }
 }
 
 #[derive(Default)]
