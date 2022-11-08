@@ -3,7 +3,7 @@ use std::u32;
 use bitmaps::Bitmap;
 use paste::paste;
 
-use crate::error::Error;
+use crate::{error::Error, instruction::NasmStr};
 
 trait HighLowBytes32 {
     fn get_high(&self) -> u16;
@@ -230,14 +230,21 @@ impl Eflags {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Register {
     Eax,
+
     Ebx,
+
     Ecx,
+
     Edx,
+
     Edi,
     Esi,
+
     Ebp,
     Esp,
+
     Eflags,
+
     Eip,
     Cs,
     Ds,
@@ -247,11 +254,11 @@ pub enum Register {
     Ss,
 }
 
-impl TryFrom<&str> for Register {
+impl TryFrom<&NasmStr<'_>> for Register {
     type Error = Error;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value.to_lowercase().as_str() {
+    fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
+        match value.0.to_lowercase().as_str() {
             "eax" => Ok(Register::Eax),
             "ebx" => Ok(Register::Ebx),
             "ecx" => Ok(Register::Ecx),
@@ -268,7 +275,7 @@ impl TryFrom<&str> for Register {
             "fs" => Ok(Register::Fs),
             "gs" => Ok(Register::Gs),
             "ss" => Ok(Register::Ss),
-            _ => Err(Error::CannotCovertType(format!("{} is not a valid register", value)))
+            _ => Err(Error::CannotCovertType(format!("{} is not a valid register", value.0)))
         }
     }
 }

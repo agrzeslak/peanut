@@ -1,9 +1,4 @@
-use crate::{
-    cpu::Cpu,
-    error::Error,
-    parser::{IntelInstructionStrParser},
-    register::Register,
-};
+use crate::{cpu::Cpu, error::Error, parser::NasmInstructionStrParser, register::Register};
 
 /// A valid instruction's signature, which may be matched against to determine what x86 instruction
 /// should be performed.
@@ -11,7 +6,7 @@ use crate::{
 struct InstructionSignature<'a> {
     opcode: u32,
     mnemonic: &'a str,
-    operands: Vec<Operand>,
+    operands: Vec<OperandType>,
     // TODO: According to
     // https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/x86-instructions, "Unless
     // otherwise noted, ... you cannot choose memory for both source and destination". Look into
@@ -21,7 +16,7 @@ struct InstructionSignature<'a> {
 }
 
 #[derive(Debug)]
-enum OperandFormat {
+enum InstructionOperandFormat {
     Cs,
     Ds,
     Es,
@@ -115,14 +110,14 @@ enum OperandFormat {
 type CpuFunction = fn(&mut Cpu, &Instruction);
 
 struct OperandFunctionMap {
-    pub operand_format: OperandFormat,
+    pub instruction_operand_format: InstructionOperandFormat,
     pub cpu_function: CpuFunction,
 }
 
-impl From<(OperandFormat, CpuFunction)> for OperandFunctionMap {
-    fn from(format_and_function: (OperandFormat, CpuFunction)) -> Self {
+impl From<(InstructionOperandFormat, CpuFunction)> for OperandFunctionMap {
+    fn from(format_and_function: (InstructionOperandFormat, CpuFunction)) -> Self {
         Self {
-            operand_format: format_and_function.0,
+            instruction_operand_format: format_and_function.0,
             cpu_function: format_and_function.1,
         }
     }
@@ -140,9 +135,9 @@ pub(crate) struct InstructionDescriptor<'a> {
 }
 
 macro_rules! expand_operand_function_mapping {
-    ($operand_format:ident, $cpu_function:ident) => {
+    ($instruction_operand_format:ident, $cpu_function:ident) => {
         Some(OperandFunctionMap {
-            operand_format: OperandFormat::$operand_format,
+            instruction_operand_format: InstructionOperandFormat::$instruction_operand_format,
             cpu_function: Cpu::$cpu_function,
         })
     };
@@ -569,20 +564,20 @@ pub(crate) fn lookup_instruction_by_opcode(mnemonic: &str) -> Option<Instruction
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum MemoryOperandOperator {
+pub enum EffectiveAddressOperator {
     Add,
     Subtract,
     Multiply,
 }
 
-impl TryFrom<char> for MemoryOperandOperator {
+impl TryFrom<char> for EffectiveAddressOperator {
     type Error = Error;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         match value {
-            '+' => Ok(MemoryOperandOperator::Add),
-            '-' => Ok(MemoryOperandOperator::Subtract),
-            '*' => Ok(MemoryOperandOperator::Multiply),
+            '+' => Ok(Self::Add),
+            '-' => Ok(Self::Subtract),
+            '*' => Ok(Self::Multiply),
             _ => Err(Error::CannotCovertType(format!(
                 "{} does not correspond to a valid operator",
                 &value
@@ -592,9 +587,23 @@ impl TryFrom<char> for MemoryOperandOperator {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum MemoryOperandType {
+pub enum EffectiveAddressOperand {
     Immediate(u64),
     Register(Register),
+}
+
+impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
+    type Error = Error;
+
+    fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
+        // if let Ok(immediate) = todo
+
+        if let Ok(register) = Register::try_from(value) {
+            return Ok(Self::Register(register));
+        }
+
+        todo!()
+    }
 }
 
 /// Represents a memory reference that is constructed out of a series of operators and operands.
@@ -606,12 +615,12 @@ pub enum MemoryOperandType {
 /// There cannot be more than two registers used in the formation of a valid memory address,
 /// therefore this is tracked and a push will fail on the third attempt to push a register.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MemoryOperandSequence {
-    sequence: Vec<(MemoryOperandOperator, MemoryOperandType)>,
+pub struct EffectiveAddress {
+    sequence: Vec<(EffectiveAddressOperator, EffectiveAddressOperand)>,
     num_registers: u8,
 }
 
-impl MemoryOperandSequence {
+impl EffectiveAddress {
     pub fn new() -> Self {
         Self {
             sequence: Vec::new(),
@@ -621,10 +630,10 @@ impl MemoryOperandSequence {
 
     pub fn push(
         &mut self,
-        operator: MemoryOperandOperator,
-        operand: MemoryOperandType,
+        operator: EffectiveAddressOperator,
+        operand: EffectiveAddressOperand,
     ) -> Result<(), Error> {
-        if let MemoryOperandType::Register(_) = operand {
+        if let EffectiveAddressOperand::Register(_) = operand {
             if self.num_registers > 2 {
                 return Err(Error::CannotParseInstruction(
                     "a memory address cannot be computed from more than two registers".into(),
@@ -637,15 +646,57 @@ impl MemoryOperandSequence {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum OperandType {
-    Immediate(u64),
-    Memory(MemoryOperandSequence),
-    Register(Register),
+impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
+    type Error = Error;
+
+    fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
+        todo!()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum SizeDirective {
+pub struct Immediate {
+    raw: String,
+    parsed: u64,
+}
+
+impl TryFrom<&NasmStr<'_>> for Immediate {
+    type Error = Error;
+
+    fn try_from(value: &NasmStr) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum OperandType {
+    Immediate(Immediate),
+    Memory(EffectiveAddress),
+    Register(Register),
+}
+
+impl TryFrom<&NasmStr<'_>> for OperandType {
+    type Error = Error;
+
+    fn try_from(nasm_str: &NasmStr<'_>) -> Result<Self, Self::Error> {
+        if let Ok(immediate) = Immediate::try_from(nasm_str) {
+            return Ok(Self::Immediate(immediate));
+        }
+
+        if let Ok(effective_address) = EffectiveAddress::try_from(nasm_str) {
+            return Ok(Self::Memory(effective_address));
+        }
+
+        if let Ok(register) = Register::try_from(nasm_str) {
+            return Ok(Self::Register(register));
+        }
+
+        Err(Error::CannotCovertType(format!("cannot convert {} (NASM format) into a valid operand type", nasm_str.0)))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Size {
     Byte,
     Word,
     Dword,
@@ -655,40 +706,38 @@ pub enum SizeDirective {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Operand {
     operand_type: OperandType,
-    size_directive: Option<SizeDirective>,
+    size_directive: Option<Size>,
 }
 
 impl Operand {
-    pub fn new(operand_type: OperandType, size_directive: Option<SizeDirective>) -> Self {
-        Self { operand_type, size_directive }
+    pub fn new(operand_type: OperandType, size_directive: Option<Size>) -> Self {
+        Self {
+            operand_type,
+            size_directive,
+        }
     }
 }
 
-pub struct AttInstructionStr<'a>(&'a str);
-pub struct IntelInstructionStr<'a>(&'a str);
-
-pub struct Instruction<'a> {
-    instruction_descriptor: &'a InstructionDescriptor<'a>,
-    operands: Vec<Operand>,
-}
-
-impl TryFrom<AttInstructionStr<'_>> for Instruction<'_> {
+impl TryFrom<&NasmStr<'_>> for Operand {
     type Error = Error;
 
-    // FIXME: Should we be implementing try_from for this? It's not a particularly trivial
-    //        conversion and I vaguely rememer that From and TryFrom should only be implemented
-    //        for trivial conversions.
-    fn try_from(instruction: AttInstructionStr) -> Result<Self, Self::Error> {
-        // AttInstructionStrParser::parse(value.0)
+    fn try_from(operand: &NasmStr<'_>) -> Result<Self, Self::Error> {
         todo!()
     }
 }
 
-impl<'a> TryFrom<IntelInstructionStr<'a>> for Instruction<'_> {
+pub struct NasmStr<'a>(pub &'a str);
+
+pub struct Instruction<'a> {
+    instruction_descriptor: &'a InstructionDescriptor<'a>,
+    operands: Vec<OperandType>,
+}
+
+impl<'a> TryFrom<NasmStr<'a>> for Instruction<'_> {
     type Error = Error;
 
-    fn try_from(instruction: IntelInstructionStr) -> Result<Self, Self::Error> {
-        IntelInstructionStrParser::parse(instruction.0)
+    fn try_from(instruction: NasmStr) -> Result<Self, Self::Error> {
+        NasmInstructionStrParser::parse(instruction.0)
     }
 }
 

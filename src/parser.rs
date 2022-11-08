@@ -1,29 +1,17 @@
 use crate::{
     error::Error,
     instruction::{
-        self, Instruction, MemoryOperandOperator, MemoryOperandSequence, MemoryOperandType, Operand,
+        self, EffectiveAddress, EffectiveAddressOperand, EffectiveAddressOperator, Instruction,
+        Operand, OperandType, Size,
     },
     register::Register,
 };
 
-pub enum Syntax {
-    Att,
-    Intel,
-}
-
-pub struct AttInstructionStrParser<'a> {
+pub struct NasmInstructionStrParser<'a> {
     remainder: &'a str,
 }
 
-pub struct AttOperandStrParser<'a> {
-    remainder: &'a str,
-}
-
-pub struct IntelInstructionStrParser<'a> {
-    remainder: &'a str,
-}
-
-impl<'a> IntelInstructionStrParser<'a> {
+impl<'a> NasmInstructionStrParser<'a> {
     pub fn parse<'b>(instruction: &'a str) -> Result<Instruction<'b>, Error> {
         // https://www.cs.virginia.edu/~evans/cs216/guides/x86.html
         // Addressing Memory
@@ -37,32 +25,6 @@ impl<'a> IntelInstructionStrParser<'a> {
         // Invalid:
         // mov eax, [ebx-ecx]       Can only ADD register values
         // mov [eax+esi+edi], ebx   At most 2 registers in address computation
-        //
-        // ---
-        //
-        // Size Directives
-        // - Generally size of data at given address can be inferred from assembly code instruction
-        // - I.e. if loading into 32-bit register, memory is inferred to be 4 bytes wide.
-        // - However, some ar ambiguous: mov [ebx], 2.
-        //   - Should you move 2 as a single byte into EBX, or as a 4 byte DWORD?
-        //   - Assembler must be explicitly told in this case.
-        // mov BYTE PTR [ebx], 2    Move 2 into the single byte at the address stored in EBX
-        // mov WORD PTR [ebx], 2    Move 16-bit int into the 2 bytes starting at address in EBX
-        // mov DWORD PTR [ebx], 2   Move 32-bit int into the 4 bytes starting at address in EBX
-        //
-        // ---
-        //
-        // Instructions
-        //
-        // <reg32>  Any 32-bit reg (EAX, EBX, ECX, EDX, ESI, EDI, ESP, or EBP)
-        // <reg16>  Any 16-bit reg (AX, BX, CX, or DX) - should also have sregs?
-        // <reg8>   Any 8-bit reg (AH, BH, CH, DH, AL, BL, CL, DL)
-        // <reg>    Any reg
-        // <mem>    A memory address (e.g. [eax], [var + 4], or dword ptr [eax+ebx])
-        // <con32>  Any 32-bit constant
-        // <con16>  Any 16-bit constant
-        // <con8>   Any 8-bit constant
-        // <con>    Any 8-, 16-, or 32-bit constant
         let mut parser = Self {
             remainder: instruction.trim(),
         };
@@ -97,37 +59,48 @@ impl<'a> IntelInstructionStrParser<'a> {
     fn parse_operands(&mut self) -> Result<Vec<Operand>, Error> {
         self.remainder
             .split(",")
-            .map(|o| IntelOperandStrParser::parse(o.trim()))
+            .map(|o| NasmOperandStrParser::parse(o.trim()))
             .collect()
     }
 }
 
-// TODO: Remove full, is never used.
-pub struct IntelOperandStrParser<'a> {
+// TODO: Rename to Parser and instead vary functionality based on taking `NasmStr`, or another
+//       format. It also doesn't seem necessary to have an instruction parser and an operand
+//       parser.
+pub struct NasmOperandStrParser<'a> {
     remainder: &'a str,
 }
 
-impl<'a> IntelOperandStrParser<'a> {
+impl<'a> NasmOperandStrParser<'a> {
     fn parse(operand: &'a str) -> Result<Operand, Error> {
         // Valid:
         //     BYTE PTR [ebx]
+        //     BYTE [ebx]
+        //     BYTE 2
+        // TODO: BYTE 20000000 -> truncates or overflows, unsure which, but valid regardless
         //     2
         //     ebx
         //     [ebx]
         //     [ebx-1]
         //     [ebx+1]
         //     [ebx+eax]
+        //     [ ebx + eax ]
         //     [ebx+4*eax]
+        //     [ebx+eax*4]
         //     [eax*4+0x419260]
+        //     Whitespace is entirely ignored. We can probably strip all whitespace within the
+        //     operands.
+        //     No limit to number of additions or multiplications of scalars.
         // Invalid:
         //     [ebx-eax] no subtraction with registers.
+        //     [ebx*eax] no multiplication with registers.
         //     [ebx+eax+ecx] at most 2 registers.
-        // TODO: Check if [ebx+eax*4] is invalid (imm after reg in offset).
-        // TODO: Check if [ebx + eax] is invalid (spaces around operator).
+        //     [eax+bx] must be of same size
+        //     [ax]/[al] must be 32-bit on x86. Only 32-bit registers even in combination with
+        //     others.
+        // These are called "effective addresses" by nasm.
         // TODO: Eventually will need to parse variable names that refer to variables within the
         //       assembly file.
-        // TODO: Check if you can add different sized registers together e.g. [eax+bx]. I suspect
-        //       not. Add test cases accordingly.
         let mut parser = Self {
             remainder: operand.trim(),
         };
@@ -148,23 +121,29 @@ impl<'a> IntelOperandStrParser<'a> {
             return Err(empty_error);
         }
 
-        // 2. Is it a memory reference?
-        let memory_reference = parser.parse_memory_reference()?;
-        if memory_reference.is_none() && size_directive.is_some() {
-            return Err(Error::CannotParseInstruction(
-                "a size directive was provided, but no memory address".into(),
+        // 2. Is it an effective address?
+        if parser.remainder.contains('[') {
+            let effective_address = parser.parse_effective_address()?;
+            return Ok(Operand::new(
+                OperandType::Memory(effective_address),
+                size_directive,
             ));
         }
 
         // 3. Is it a register?
+        let operand = Operand::try_from(value)
+
         // 4. Is it an immediate value?
 
         todo!()
     }
 
-    fn parse_size_directive(&mut self) -> Result<Option<u8>, Error> {
+    fn parse_size_directive(&mut self) -> Result<Option<Size>, Error> {
         let remainder_at_start = self.remainder;
 
+        // FIXME: DWORD[EAX] is valid, no space is required.
+        //        DWORD0 is not valid. Can check if '[' exists and split on that + trim, else split
+        //        on ' '.
         let (token, remainder) = self
             .remainder
             .split_once(" ")
@@ -172,74 +151,85 @@ impl<'a> IntelOperandStrParser<'a> {
         self.remainder = remainder;
 
         let size_directive = match token.to_uppercase().as_str() {
-            "BYTE" => Some(1u8),
-            "WORD" => Some(2u8),
-            "DWORD" => Some(4u8),
-            "QWORD" => Some(8u8),
+            "BYTE" => Some(Size::Byte),
+            "WORD" => Some(Size::Word),
+            "DWORD" => Some(Size::Dword),
+            "QWORD" => Some(Size::Qword),
             _ => None,
         };
 
-        // If a size directive was provided, the next token should be "PTR".
         if size_directive.is_some() {
-            let error =
-                Error::CannotParseInstruction("operand size specifier is incomplete".into());
-            let (token, remainder) = remainder.split_once(" ").ok_or(error.clone())?;
-            self.remainder = remainder;
-            if token.to_uppercase().as_str() != "PTR" {
-                return Err(error);
+            if let Some((token, _)) = remainder.split_once(" ") {
+                if token.to_uppercase().as_str() == "PTR" {
+                    return Err(Error::CannotParseInstruction(
+                        "NASM syntax does not use the \"PTR\" keyword".into(),
+                    ));
+                }
             }
         } else {
-            // If there was no size directive, revert the remainder because it still needs to be
-            // parsed.
+            // No size directive: revert remainder so that it may be parsed again.
             self.remainder = remainder_at_start;
         }
 
         Ok(size_directive)
     }
 
-    fn parse_memory_reference(&mut self) -> Result<Option<Operand>, Error> {
-        if self.remainder.len() < 3 {
-            return Ok(None);
-        }
-
+    fn parse_effective_address(&mut self) -> Result<EffectiveAddress, Error> {
         let mut chars = self.remainder.chars();
         if chars.nth(0).unwrap() != '[' {
-            return Ok(None);
+            return Err(Error::CannotParseInstruction(
+                "invalid effective address (must start with \"[\")".into(),
+            ));
         }
 
         if chars.last().unwrap() != ']' {
             return Err(Error::CannotParseInstruction(
-                "malformed memory reference (\"[\" not closed)".into(),
+                "invalid effective address (expected \"]\" at end of operand)".into(),
+            ));
+        }
+
+        if self.remainder.len() < 3 {
+            return Err(Error::CannotParseInstruction(
+                "invalid effective address (no contents)".into(),
             ));
         }
 
         let inner = &self.remainder[1..self.remainder.len() - 2].to_lowercase();
-        let mut operator = MemoryOperandOperator::Add;
-        let mut memory_operand_sequence = MemoryOperandSequence::new();
-        for token in inner.split_inclusive(&['+', '-', '*']) {
-            if let Ok(register) = Register::try_from(token) {
-                // Push will fail if we attempt to push three or more registers as this is invalid.
-                memory_operand_sequence
-                    .push(operator.clone(), MemoryOperandType::Register(register))?;
-            }
-            // Unsure if necessary or if u64 parsing has it built in.
-            // if token.starts_with("0x") {
-            // token = &token[2..];
-            // }
-            if let Ok(immediate) = token.parse::<u64>() {
-                // Push can only fail when pushing registers, therefore we do not need to verify
-                // the result.
-                memory_operand_sequence
-                    .push(operator.clone(), MemoryOperandType::Immediate(immediate));
-            }
-            if let Some(last) = token.chars().last() {
-                if let Ok(new_operator) = MemoryOperandOperator::try_from(last) {
-                    operator = new_operator;
+        let mut operator = EffectiveAddressOperator::Add;
+        let mut memory_operand_sequence = EffectiveAddress::new();
+        for mut token in inner.split_inclusive(&['+', '-', '*']) {
+            let next_operator = if let Ok(next_operator) =
+                EffectiveAddressOperator::try_from(token.chars().last().unwrap())
+            {
+                // Remove the trailing operand and trim since whitespace is irrelevant.
+                token = token[0..token.len() - 2].trim();
+                next_operator
+            } else {
+                // Irrelevant: this is the final iteration.
+                EffectiveAddressOperator::Add
+            };
+            // Only 32-bit registers are valid.
+            let operand = EffectiveAddressOperand::try_from(token)?;
+            if let EffectiveAddressOperand::Register(register) = &operand {
+                if !(register == &Register::Eax
+                    || register == &Register::Ebx
+                    || register == &Register::Ecx
+                    || register == &Register::Edx
+                    || register == &Register::Edi
+                    || register == &Register::Esi
+                    || register == &Register::Ebp
+                    || register == &Register::Esp)
+                {
+                    return Err(Error::CannotParseInstruction(
+                        "invalid effective address (must use 32-bit registers)".into(),
+                    ));
                 }
             }
+            memory_operand_sequence.push(operator, operand)?;
+            operator = next_operator;
         }
 
-        todo!()
+        Ok(memory_operand_sequence)
     }
 
     fn may_be_valid_immediate(value: &str) -> bool {
@@ -249,151 +239,137 @@ impl<'a> IntelOperandStrParser<'a> {
 
 #[cfg(test)]
 mod tests {
-    mod intel {
+    mod nasm {
         use crate::error::Error;
-        use crate::instruction::{OperandType, SizeDirective};
+        use crate::instruction::{Operand, OperandType, Size};
 
         use super::super::*;
 
         #[test]
         fn parse_immediate_operand() {
             assert_eq!(
-                IntelOperandStrParser::parse("58").unwrap(),
+                NasmOperandStrParser::parse("58").unwrap(),
                 Operand::new(OperandType::Immediate(58), None)
             );
         }
 
         #[test]
-        fn parse_memory_operand_no_size_directive() {
-            let mut expected = MemoryOperandSequence::new();
+        fn parse_effective_address_operand_without_size_directive() {
+            let mut expected = EffectiveAddress::new();
             expected
                 .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Ebx),
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Ebx),
                 )
                 .unwrap();
 
             assert_eq!(
-                IntelOperandStrParser::parse("[ebx]").unwrap(),
+                NasmOperandStrParser::parse("[ebx]").unwrap(),
                 Operand::new(OperandType::Memory(expected), None)
             );
 
-            let mut expected = MemoryOperandSequence::new();
+            let mut expected = EffectiveAddress::new();
             expected
                 .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Ebx),
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Ebx),
                 )
                 .unwrap();
             expected
                 .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Eax),
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Eax),
                 )
                 .unwrap();
 
             assert_eq!(
-                IntelOperandStrParser::parse("[ebx+eax]").unwrap(),
+                NasmOperandStrParser::parse("[ ebx +  eax ]").unwrap(),
                 Operand::new(OperandType::Memory(expected), None)
             );
 
-            let mut expected = MemoryOperandSequence::new();
+            let mut expected = EffectiveAddress::new();
             expected
                 .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Edx),
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Edx),
                 )
                 .unwrap();
             expected
                 .push(
-                    MemoryOperandOperator::Subtract,
-                    MemoryOperandType::Register(Register::Edi),
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Immediate(4),
+                )
+                .unwrap();
+            expected
+                .push(
+                    EffectiveAddressOperator::Multiply,
+                    EffectiveAddressOperand::Register(Register::Ebx),
                 )
                 .unwrap();
 
             assert_eq!(
-                IntelOperandStrParser::parse("[edx-edi]").unwrap(),
+                NasmOperandStrParser::parse("[EAX+4*EBX]").unwrap(),
                 Operand::new(OperandType::Memory(expected), None)
-            );
-
-            let mut expected = MemoryOperandSequence::new();
-            expected
-                .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Edx),
-                )
-                .unwrap();
-            expected
-                .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Immediate(4),
-                )
-                .unwrap();
-            expected
-                .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Ebx),
-                )
-                .unwrap();
-
-            assert_eq!(
-                IntelOperandStrParser::parse("[EAX+4*EBX]").unwrap(),
-                Operand::new(OperandType::Memory(expected), None)
-            );
-
-            let mut expected = MemoryOperandSequence::new();
-            expected
-                .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Edx),
-                )
-                .unwrap();
-            expected
-                .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Immediate(4),
-                )
-                .unwrap();
-            expected
-                .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Ebx),
-                )
-                .unwrap();
-
-            assert!(
-                IntelOperandStrParser::parse("[eax+EBX+ecx]").is_err()
             );
         }
 
         #[test]
-        fn parse_memory_operand_with_size_directive() {
-            let mut expected = MemoryOperandSequence::new();
+        fn parse_effective_address_with_size_directive() {
+            let mut expected = EffectiveAddress::new();
             expected
                 .push(
-                    MemoryOperandOperator::Add,
-                    MemoryOperandType::Register(Register::Ebx),
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Ebx),
                 )
                 .unwrap();
 
             assert_eq!(
-                IntelOperandStrParser::parse("BYTE PTR [ebx]").unwrap(),
-                Operand::new(OperandType::Memory(expected.clone()), Some(SizeDirective::Byte))
+                NasmOperandStrParser::parse("BYTE [ebx]").unwrap(),
+                Operand::new(OperandType::Memory(expected.clone()), Some(Size::Byte))
             );
 
             assert_eq!(
-                IntelOperandStrParser::parse("word ptr [ebx]").unwrap(),
-                Operand::new(OperandType::Memory(expected.clone()), Some(SizeDirective::Word))
+                NasmOperandStrParser::parse("word        [ebx]").unwrap(),
+                Operand::new(OperandType::Memory(expected.clone()), Some(Size::Word))
             );
 
             assert_eq!(
-                IntelOperandStrParser::parse("dword PTR [ebx]").unwrap(),
-                Operand::new(OperandType::Memory(expected), Some(SizeDirective::Dword))
+                NasmOperandStrParser::parse("dword[ ebx    ]").unwrap(),
+                Operand::new(OperandType::Memory(expected.clone()), Some(Size::Dword))
+            );
+
+            assert_eq!(
+                NasmOperandStrParser::parse("QwOrD    [    ebx   ]").unwrap(),
+                Operand::new(OperandType::Memory(expected), Some(Size::Qword))
             );
         }
 
         #[test]
-        fn parse_register_operand() {}
+        fn parse_invalid_effective_address() {
+            assert!(NasmOperandStrParser::parse("[eax+EBX+ecx]").is_err());
+            assert!(NasmOperandStrParser::parse("[edx-edi]").is_err());
+            assert!(NasmOperandStrParser::parse("[edx+ax]").is_err());
+            assert!(NasmOperandStrParser::parse("[ax+al]").is_err());
+            assert!(NasmOperandStrParser::parse("[cs+dx]").is_err());
+            assert!(NasmOperandStrParser::parse("[ax]").is_err());
+            assert!(NasmOperandStrParser::parse("[al]").is_err());
+            assert!(NasmOperandStrParser::parse("[eax*10]").is_err());
+            assert!(NasmOperandStrParser::parse("a[eax]").is_err());
+            assert!(NasmOperandStrParser::parse("eax]").is_err());
+            assert!(NasmOperandStrParser::parse("[eax").is_err());
+            assert!(NasmOperandStrParser::parse("20+[eax]").is_err());
+            assert!(NasmOperandStrParser::parse("[eip]").is_err());
+            assert!(NasmOperandStrParser::parse("[eflags]").is_err());
+            assert!(NasmOperandStrParser::parse("DWORD PTR [eax]").is_err());
+            assert!(NasmOperandStrParser::parse("WORDPTR[eax]").is_err());
+            assert!(NasmOperandStrParser::parse("[eax]a").is_err());
+            assert!(NasmOperandStrParser::parse("a[eax]").is_err());
+        }
+
+        #[test]
+        fn parse_register_operand() {
+            // assert_eq!(NasmOperandStrParser::parse("eax").unwrap(), Operand::)
+        }
 
         #[test]
         fn parse_invalid_operand() {}
