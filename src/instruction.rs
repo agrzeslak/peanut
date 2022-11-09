@@ -660,11 +660,134 @@ pub struct Immediate {
     parsed: u64,
 }
 
+impl Immediate {
+    pub fn new(raw: &str, parsed: u64) -> Self {
+        Self { raw: raw.into(), parsed }
+    }
+}
+
 impl TryFrom<&NasmStr<'_>> for Immediate {
     type Error = Error;
 
     fn try_from(value: &NasmStr) -> Result<Self, Self::Error> {
-        todo!()
+        // 200          ; decimal
+        // 0200         ; still decimal - the leading 0 does not make it octal
+        // 0000000200   ; valid
+        // 0200d        ; explicitly decimal - d suffix
+        // 0d200        ; also decimal - 0d prefex
+        // 00d200       ; invalid
+        // 0c8h         ; hex - h suffix, but leading 0 is required because c8h looks like a var
+        // 0xc8         ; hex - the classic 0x prefix
+        // 0hc8         ; hex - for some reason NASM likes 0h
+        // 310q         ; octal - q suffix
+        // 0q310        ; octal - 0q prefix
+        // 11001000b    ; binary - b suffix
+        // 0b1100_1000
+        // 0d prefix/d suffix = decimal
+        // 0q prefix/q suffix = octal
+        // 0..h               = hex
+        // ..h (where first char is numberic) = hex
+        // 0x...              = hex
+        // 0h                 = hex
+        if value.0.len() > 1 {
+            if value.0.ends_with("b") {
+                let parsed =
+                    u64::from_str_radix(&value.0[..value.0.len() - 1], 2).map_err(|_| {
+                        Error::CannotCovertType("could not parse immediate value as binary".into())
+                    })?;
+                return Ok(Immediate {
+                    raw: value.0.into(),
+                    parsed,
+                });
+            }
+
+            if value.0.ends_with("q") {
+                let parsed =
+                    u64::from_str_radix(&value.0[..value.0.len() - 1], 8).map_err(|_| {
+                        Error::CannotCovertType("could not parse immediate value as octal".into())
+                    })?;
+                return Ok(Immediate {
+                    raw: value.0.into(),
+                    parsed,
+                });
+            }
+
+            if value.0.ends_with("d") {
+                let parsed =
+                    u64::from_str_radix(&value.0[..value.0.len() - 1], 10).map_err(|_| {
+                        Error::CannotCovertType("could not parse immediate value as decimal".into())
+                    })?;
+                return Ok(Immediate {
+                    raw: value.0.into(),
+                    parsed,
+                });
+            }
+
+            if value.0.chars().nth(0).unwrap().is_numeric() && value.0.ends_with("h") {
+                let parsed =
+                    u64::from_str_radix(&value.0[..value.0.len() - 1], 16).map_err(|_| {
+                        Error::CannotCovertType("could not parse immediate value as decimal".into())
+                    })?;
+                return Ok(Immediate {
+                    raw: value.0.into(),
+                    parsed,
+                });
+            }
+        }
+
+        if value.0.len() > 2 {
+            let prefix = value.0[0..=1].to_lowercase();
+            println!("prefix = {prefix}");
+            if prefix == "0b" {
+                let parsed = u64::from_str_radix(&value.0[2..], 2).map_err(|_| {
+                    Error::CannotCovertType("could not parse immediate value as binary".into())
+                })?;
+                return Ok(Immediate {
+                    raw: value.0.into(),
+                    parsed,
+                });
+            }
+
+            if prefix == "0q" {
+                let parsed = u64::from_str_radix(&value.0[2..], 8).map_err(|_| {
+                    Error::CannotCovertType("could not parse immediate value as octal".into())
+                })?;
+                return Ok(Immediate {
+                    raw: value.0.into(),
+                    parsed,
+                });
+            }
+
+            if prefix == "0d" {
+                let parsed = u64::from_str_radix(&value.0[2..], 10).map_err(|_| {
+                    Error::CannotCovertType("could not parse immediate value as decimal".into())
+                })?;
+                return Ok(Immediate {
+                    raw: value.0.into(),
+                    parsed,
+                });
+            }
+
+            if prefix == "0h" || prefix == "0x" {
+                let parsed = u64::from_str_radix(&value.0[2..], 16).map_err(|_| {
+                    Error::CannotCovertType("could not parse immediate value as hexadecimal".into())
+                })?;
+                return Ok(Immediate {
+                    raw: value.0.into(),
+                    parsed,
+                });
+            }
+        }
+
+        let parsed = value
+            .0
+            .parse::<u64>()
+            .map_err(|_| Error::CannotCovertType("invalid immediate value".into()))?;
+
+        Ok(Immediate {
+            raw: value.0.to_string(),
+            parsed,
+        })
     }
 }
 
@@ -691,7 +814,10 @@ impl TryFrom<&NasmStr<'_>> for OperandType {
             return Ok(Self::Register(register));
         }
 
-        Err(Error::CannotCovertType(format!("cannot convert {} (NASM format) into a valid operand type", nasm_str.0)))
+        Err(Error::CannotCovertType(format!(
+            "cannot convert {} (NASM format) into a valid operand type",
+            nasm_str.0
+        )))
     }
 }
 
@@ -737,11 +863,99 @@ impl<'a> TryFrom<NasmStr<'a>> for Instruction<'_> {
     type Error = Error;
 
     fn try_from(instruction: NasmStr) -> Result<Self, Self::Error> {
-        NasmInstructionStrParser::parse(instruction.0)
+        // NasmInstructionStrParser::parse(instruction.0)
+        todo!()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn immediate_try_from_nasm_str() {
+        assert!(Immediate::try_from(&NasmStr("00d200")).is_err());
+        assert!(Immediate::try_from(&NasmStr("c0h")).is_err());
+
+        let input = "0x200";
+        let expected_parsed = 512;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let input = "0h200";
+        let expected_parsed = 512;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let input = "000200h";
+        let expected_parsed = 512;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let input = "0d200";
+        let expected_parsed = 200;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let input = "200d";
+        let expected_parsed = 200;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let input = "0q0200";
+        let expected_parsed = 128;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let input = "000000000000000000000000000000000000000000000000000000200q";
+        let expected_parsed = 128;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let input = "0b00101";
+        let expected_parsed = 5;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let input = "000000000000000000000000000000000000000000000000000000000000000000000000101b";
+        let expected_parsed = 5;
+        let expected_immediate = Immediate {
+            raw: input.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+    }
 }

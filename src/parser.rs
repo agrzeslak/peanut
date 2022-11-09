@@ -33,8 +33,7 @@ impl<'a> NasmInstructionStrParser<'a> {
 
         let instruction_descriptors = instruction::lookup_instructions_by_mnemonic(mnemonic);
         if instruction_descriptors.is_empty() {
-            return Err(Error::CannotParseInstruction(
-                "no matching mnemonics".into(),
+            return Err(Error::CannotParseInstruction( "no matching mnemonics".into(),
             ));
         }
 
@@ -67,9 +66,7 @@ impl<'a> NasmInstructionStrParser<'a> {
 // TODO: Rename to Parser and instead vary functionality based on taking `NasmStr`, or another
 //       format. It also doesn't seem necessary to have an instruction parser and an operand
 //       parser.
-pub struct NasmOperandStrParser<'a> {
-    remainder: &'a str,
-}
+pub struct NasmOperandStrParser<'a> { remainder: &'a str, }
 
 impl<'a> NasmOperandStrParser<'a> {
     fn parse(operand: &'a str) -> Result<Operand, Error> {
@@ -131,7 +128,7 @@ impl<'a> NasmOperandStrParser<'a> {
         }
 
         // 3. Is it a register?
-        let operand = Operand::try_from(value)
+        // let operand = Operand::try_from(value)
 
         // 4. Is it an immediate value?
 
@@ -209,24 +206,24 @@ impl<'a> NasmOperandStrParser<'a> {
                 EffectiveAddressOperator::Add
             };
             // Only 32-bit registers are valid.
-            let operand = EffectiveAddressOperand::try_from(token)?;
-            if let EffectiveAddressOperand::Register(register) = &operand {
-                if !(register == &Register::Eax
-                    || register == &Register::Ebx
-                    || register == &Register::Ecx
-                    || register == &Register::Edx
-                    || register == &Register::Edi
-                    || register == &Register::Esi
-                    || register == &Register::Ebp
-                    || register == &Register::Esp)
-                {
-                    return Err(Error::CannotParseInstruction(
-                        "invalid effective address (must use 32-bit registers)".into(),
-                    ));
-                }
-            }
-            memory_operand_sequence.push(operator, operand)?;
-            operator = next_operator;
+            // let operand = EffectiveAddressOperand::try_from(token)?;
+            // if let EffectiveAddressOperand::Register(register) = &operand {
+            //     if !(register == &Register::Eax
+            //         || register == &Register::Ebx
+            //         || register == &Register::Ecx
+            //         || register == &Register::Edx
+            //         || register == &Register::Edi
+            //         || register == &Register::Esi
+            //         || register == &Register::Ebp
+            //         || register == &Register::Esp)
+            //     {
+            //         return Err(Error::CannotParseInstruction(
+            //             "invalid effective address (must use 32-bit registers)".into(),
+            //         ));
+            //     }
+            // }
+            // memory_operand_sequence.push(operator, operand)?;
+            // operator = next_operator;
         }
 
         Ok(memory_operand_sequence)
@@ -241,7 +238,7 @@ impl<'a> NasmOperandStrParser<'a> {
 mod tests {
     mod nasm {
         use crate::error::Error;
-        use crate::instruction::{Operand, OperandType, Size};
+        use crate::instruction::{Immediate, Operand, OperandType, Size};
 
         use super::super::*;
 
@@ -249,7 +246,7 @@ mod tests {
         fn parse_immediate_operand() {
             assert_eq!(
                 NasmOperandStrParser::parse("58").unwrap(),
-                Operand::new(OperandType::Immediate(58), None)
+                Operand::new(OperandType::Immediate(Immediate::new("58".into(), 58)), None)
             );
         }
 
