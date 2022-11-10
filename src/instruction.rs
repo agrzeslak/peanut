@@ -588,7 +588,7 @@ impl TryFrom<char> for EffectiveAddressOperator {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EffectiveAddressOperand {
-    Immediate(u64),
+    Immediate(Immediate),
     Register(Register),
 }
 
@@ -596,7 +596,9 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
     type Error = Error;
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
-        // if let Ok(immediate) = todo
+        if let Ok(immediate) = Immediate::try_from(value) {
+            return Ok(Self::Immediate(immediate));
+        }
 
         if let Ok(register) = Register::try_from(value) {
             return Ok(Self::Register(register));
@@ -650,11 +652,75 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
     type Error = Error;
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
-        todo!()
+        let mut remainder = value.0;
+        let mut chars = remainder.chars();
+        if chars.nth(0).unwrap() != '[' {
+            return Err(Error::CannotParseInstruction(
+                "invalid effective address (must start with \"[\")".into(),
+            ));
+        }
+
+        if chars.last().unwrap() != ']' {
+            return Err(Error::CannotParseInstruction(
+                "invalid effective address (expected \"]\" at end of operand)".into(),
+            ));
+        }
+
+        if remainder.len() < 3 {
+            return Err(Error::CannotParseInstruction(
+                "invalid effective address (no contents)".into(),
+            ));
+        }
+
+        let inner = &remainder[1..remainder.len() - 1].to_lowercase();
+        let mut operator = EffectiveAddressOperator::Add;
+        let mut memory_operand_sequence = EffectiveAddress::new();
+        for mut token in inner.split_inclusive(&['+', '-', '*']) {
+            let next_operator = if let Ok(next_operator) =
+                EffectiveAddressOperator::try_from(token.chars().last().unwrap())
+            {
+                // Remove the trailing operand and trim since whitespace is irrelevant.
+                token = token[0..token.len() - 1].trim();
+                next_operator
+            } else {
+                // Irrelevant: this is the final iteration.
+                EffectiveAddressOperator::Add
+            };
+            let operand = EffectiveAddressOperand::try_from(&NasmStr(token))?;
+            match &operand {
+                EffectiveAddressOperand::Immediate(immediate) => {
+                    if operator == EffectiveAddressOperator::Multiply && immediate.parsed() > 9 {
+                        return Err(Error::CannotParseInstruction("invalid effective address (scale can be at most 9)".into()));
+                    }
+                }
+                EffectiveAddressOperand::Register(register) => {
+                    if operator == EffectiveAddressOperator::Subtract || operator == EffectiveAddressOperator::Multiply {
+                        return Err(Error::CannotParseInstruction("invalid effective address (registers can only be added)".into()));
+                    }
+                    if !(register == &Register::Eax
+                        || register == &Register::Ebx
+                        || register == &Register::Ecx
+                        || register == &Register::Edx
+                        || register == &Register::Edi
+                        || register == &Register::Esi
+                        || register == &Register::Ebp
+                        || register == &Register::Esp)
+                    {
+                        return Err(Error::CannotParseInstruction(
+                            "invalid effective address (must use only valid 32-bit registers)".into(),
+                        ));
+                    }
+                }
+            }
+            memory_operand_sequence.push(operator, operand)?;
+            operator = next_operator;
+        }
+
+        Ok(memory_operand_sequence)
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Immediate {
     raw: String,
     parsed: u64,
@@ -662,7 +728,18 @@ pub struct Immediate {
 
 impl Immediate {
     pub fn new(raw: &str, parsed: u64) -> Self {
-        Self { raw: raw.into(), parsed }
+        Self {
+            raw: raw.into(),
+            parsed,
+        }
+    }
+
+    pub fn raw(&self) -> &str {
+        &self.raw
+    }
+
+    pub fn parsed(&self) -> u64 {
+        self.parsed
     }
 }
 

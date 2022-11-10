@@ -33,7 +33,8 @@ impl<'a> NasmInstructionStrParser<'a> {
 
         let instruction_descriptors = instruction::lookup_instructions_by_mnemonic(mnemonic);
         if instruction_descriptors.is_empty() {
-            return Err(Error::CannotParseInstruction( "no matching mnemonics".into(),
+            return Err(Error::CannotParseInstruction(
+                "no matching mnemonics".into(),
             ));
         }
 
@@ -66,7 +67,9 @@ impl<'a> NasmInstructionStrParser<'a> {
 // TODO: Rename to Parser and instead vary functionality based on taking `NasmStr`, or another
 //       format. It also doesn't seem necessary to have an instruction parser and an operand
 //       parser.
-pub struct NasmOperandStrParser<'a> { remainder: &'a str, }
+pub struct NasmOperandStrParser<'a> {
+    remainder: &'a str,
+}
 
 impl<'a> NasmOperandStrParser<'a> {
     fn parse(operand: &'a str) -> Result<Operand, Error> {
@@ -246,7 +249,10 @@ mod tests {
         fn parse_immediate_operand() {
             assert_eq!(
                 NasmOperandStrParser::parse("58").unwrap(),
-                Operand::new(OperandType::Immediate(Immediate::new("58".into(), 58)), None)
+                Operand::new(
+                    OperandType::Immediate(Immediate::new("58".into(), 58)),
+                    None
+                )
             );
         }
 
