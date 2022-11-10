@@ -1,20 +1,5 @@
 use crate::{cpu::Cpu, error::Error, parser::NasmInstructionStrParser, register::Register};
 
-/// A valid instruction's signature, which may be matched against to determine what x86 instruction
-/// should be performed.
-#[derive(Debug, PartialEq, Eq)]
-struct InstructionSignature<'a> {
-    opcode: u32,
-    mnemonic: &'a str,
-    operands: Vec<OperandType>,
-    // TODO: According to
-    // https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/x86-instructions, "Unless
-    // otherwise noted, ... you cannot choose memory for both source and destination". Look into
-    // this further.
-    source_and_destination_can_be_memory: bool,
-    // function: Fn
-}
-
 #[derive(Debug)]
 enum InstructionOperandFormat {
     Cs,
@@ -690,12 +675,18 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
             match &operand {
                 EffectiveAddressOperand::Immediate(immediate) => {
                     if operator == EffectiveAddressOperator::Multiply && immediate.parsed() > 9 {
-                        return Err(Error::CannotParseInstruction("invalid effective address (scale can be at most 9)".into()));
+                        return Err(Error::CannotParseInstruction(
+                            "invalid effective address (scale can be at most 9)".into(),
+                        ));
                     }
                 }
                 EffectiveAddressOperand::Register(register) => {
-                    if operator == EffectiveAddressOperator::Subtract || operator == EffectiveAddressOperator::Multiply {
-                        return Err(Error::CannotParseInstruction("invalid effective address (registers can only be added)".into()));
+                    if operator == EffectiveAddressOperator::Subtract
+                        || operator == EffectiveAddressOperator::Multiply
+                    {
+                        return Err(Error::CannotParseInstruction(
+                            "invalid effective address (registers can only be added)".into(),
+                        ));
                     }
                     if !(register == &Register::Eax
                         || register == &Register::Ebx
@@ -707,7 +698,8 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
                         || register == &Register::Esp)
                     {
                         return Err(Error::CannotParseInstruction(
-                            "invalid effective address (must use only valid 32-bit registers)".into(),
+                            "invalid effective address (must use only valid 32-bit registers)"
+                                .into(),
                         ));
                     }
                 }
@@ -765,101 +757,61 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
         // 0..h               = hex
         // ..h (where first char is numberic) = hex
         // 0x...              = hex
-        // 0h                 = hex
+        // 0h...              = hex
+        let parse = |value: &str, radix: u32, radix_name: &str| {
+            let parsed = u64::from_str_radix(value, radix).map_err(|_| {
+                Error::CannotParseInstruction(format!("could not parse {} as {}", value, radix_name))
+            })?;
+            return Ok(Immediate {
+                raw: value.into(),
+                parsed,
+            });
+
+        };
+
         if value.0.len() > 1 {
+            let value_without_suffix = &value.0[..value.0.len() - 1];
             if value.0.ends_with("b") {
-                let parsed =
-                    u64::from_str_radix(&value.0[..value.0.len() - 1], 2).map_err(|_| {
-                        Error::CannotCovertType("could not parse immediate value as binary".into())
-                    })?;
-                return Ok(Immediate {
-                    raw: value.0.into(),
-                    parsed,
-                });
+                return parse(value_without_suffix, 2, "binary");
             }
 
             if value.0.ends_with("q") {
-                let parsed =
-                    u64::from_str_radix(&value.0[..value.0.len() - 1], 8).map_err(|_| {
-                        Error::CannotCovertType("could not parse immediate value as octal".into())
-                    })?;
-                return Ok(Immediate {
-                    raw: value.0.into(),
-                    parsed,
-                });
+                return parse(value_without_suffix, 8, "octal");
             }
 
             if value.0.ends_with("d") {
-                let parsed =
-                    u64::from_str_radix(&value.0[..value.0.len() - 1], 10).map_err(|_| {
-                        Error::CannotCovertType("could not parse immediate value as decimal".into())
-                    })?;
-                return Ok(Immediate {
-                    raw: value.0.into(),
-                    parsed,
-                });
+                return parse(value_without_suffix, 10, "decimal");
             }
 
             if value.0.chars().nth(0).unwrap().is_numeric() && value.0.ends_with("h") {
-                let parsed =
-                    u64::from_str_radix(&value.0[..value.0.len() - 1], 16).map_err(|_| {
-                        Error::CannotCovertType("could not parse immediate value as decimal".into())
-                    })?;
-                return Ok(Immediate {
-                    raw: value.0.into(),
-                    parsed,
-                });
+                return parse(value_without_suffix, 16, "hexadecimal");
             }
         }
 
         if value.0.len() > 2 {
             let prefix = value.0[0..=1].to_lowercase();
-            println!("prefix = {prefix}");
+            let value_without_prefix = &value.0[2..];
             if prefix == "0b" {
-                let parsed = u64::from_str_radix(&value.0[2..], 2).map_err(|_| {
-                    Error::CannotCovertType("could not parse immediate value as binary".into())
-                })?;
-                return Ok(Immediate {
-                    raw: value.0.into(),
-                    parsed,
-                });
+                return parse(value_without_prefix, 2, "binary");
             }
 
             if prefix == "0q" {
-                let parsed = u64::from_str_radix(&value.0[2..], 8).map_err(|_| {
-                    Error::CannotCovertType("could not parse immediate value as octal".into())
-                })?;
-                return Ok(Immediate {
-                    raw: value.0.into(),
-                    parsed,
-                });
+                return parse(value_without_prefix, 8, "octal");
             }
 
             if prefix == "0d" {
-                let parsed = u64::from_str_radix(&value.0[2..], 10).map_err(|_| {
-                    Error::CannotCovertType("could not parse immediate value as decimal".into())
-                })?;
-                return Ok(Immediate {
-                    raw: value.0.into(),
-                    parsed,
-                });
+                return parse(value_without_prefix, 10, "decimal");
             }
 
             if prefix == "0h" || prefix == "0x" {
-                let parsed = u64::from_str_radix(&value.0[2..], 16).map_err(|_| {
-                    Error::CannotCovertType("could not parse immediate value as hexadecimal".into())
-                })?;
-                return Ok(Immediate {
-                    raw: value.0.into(),
-                    parsed,
-                });
+                return parse(value_without_prefix, 16, "hexadecimal");
             }
         }
 
         let parsed = value
             .0
             .parse::<u64>()
-            .map_err(|_| Error::CannotCovertType("invalid immediate value".into()))?;
+            .map_err(|_| Error::CannotCovertType(format!("invalid immediate value ({})", value.0)))?;
 
         Ok(Immediate {
             raw: value.0.to_string(),
@@ -904,6 +856,24 @@ pub enum Size {
     Word,
     Dword,
     Qword,
+}
+
+impl TryFrom<&NasmStr<'_>> for Size {
+    type Error = Error;
+
+    fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
+        use Size::*;
+        match value.0.to_uppercase().as_str() {
+            "BYTE" => Ok(Byte),
+            "WORD" => Ok(Word),
+            "DWORD" => Ok(Dword),
+            "QWORD" => Ok(Qword),
+            value @ _ => Err(Error::CannotParseInstruction(format!(
+                "cannot convert {} into a valid size",
+                value
+            ))),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

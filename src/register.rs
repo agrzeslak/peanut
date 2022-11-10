@@ -275,7 +275,7 @@ impl TryFrom<&NasmStr<'_>> for Register {
             "fs" => Ok(Register::Fs),
             "gs" => Ok(Register::Gs),
             "ss" => Ok(Register::Ss),
-            _ => Err(Error::CannotCovertType(format!("{} is not a valid register", value.0)))
+            _ => Err(Error::CannotParseInstruction(format!("{} is not a valid register", value.0)))
         }
     }
 }

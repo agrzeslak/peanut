@@ -231,10 +231,6 @@ impl<'a> NasmOperandStrParser<'a> {
 
         Ok(memory_operand_sequence)
     }
-
-    fn may_be_valid_immediate(value: &str) -> bool {
-        todo!()
-    }
 }
 
 #[cfg(test)]
