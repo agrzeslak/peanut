@@ -296,7 +296,7 @@ mod tests {
             expected
                 .push(
                     EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Immediate(4),
+                    EffectiveAddressOperand::Immediate(Immediate::new("4", 4)),
                 )
                 .unwrap();
             expected

@@ -1,4 +1,4 @@
-use std::u32;
+use std::{u32, fmt::Display};
 
 use bitmaps::Bitmap;
 use paste::paste;
@@ -252,6 +252,33 @@ pub enum Register {
     Fs,
     Gs,
     Ss,
+}
+
+impl Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Register::*;
+
+        let register = match self {
+            Eax => "EAX",
+            Ebx => "EBX",
+            Ecx => "ECX",
+            Edx => "EDX",
+            Edi => "EDI",
+            Esi => "ESI",
+            Ebp => "EBP",
+            Esp => "ESP",
+            Eflags => "EFLAGS",
+            Eip => "EIP",
+            Cs => "CS",
+            Ds => "DS",
+            Es => "ES",
+            Fs => "FS",
+            Gs => "GS",
+            Ss => "SS",
+        };
+
+        write!(f, "{register}")
+    }
 }
 
 impl TryFrom<&NasmStr<'_>> for Register {

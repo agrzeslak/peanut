@@ -564,8 +564,8 @@ impl TryFrom<char> for EffectiveAddressOperator {
             '-' => Ok(Self::Subtract),
             '*' => Ok(Self::Multiply),
             _ => Err(Error::CannotCovertType(format!(
-                "{} does not correspond to a valid operator",
-                &value
+                "'{}' does not correspond to a valid operator",
+                value
             ))),
         }
     }
@@ -589,7 +589,10 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
             return Ok(Self::Register(register));
         }
 
-        todo!()
+        Err(Error::CannotParseInstruction(format!(
+            "cannot parse \"{}\" into a valid effective address operand",
+            value.0
+        )))
     }
 }
 
@@ -675,9 +678,10 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
             match &operand {
                 EffectiveAddressOperand::Immediate(immediate) => {
                     if operator == EffectiveAddressOperator::Multiply && immediate.parsed() > 9 {
-                        return Err(Error::CannotParseInstruction(
-                            "invalid effective address (scale can be at most 9)".into(),
-                        ));
+                        return Err(Error::CannotParseInstruction(format!(
+                            "invalid effective address (scale can be at most 9, was {})",
+                            immediate.parsed()
+                        )));
                     }
                 }
                 EffectiveAddressOperand::Register(register) => {
@@ -685,7 +689,8 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
                         || operator == EffectiveAddressOperator::Multiply
                     {
                         return Err(Error::CannotParseInstruction(
-                            "invalid effective address (registers can only be added)".into(),
+                            "invalid effective address (registers can only be added together)"
+                                .into(),
                         ));
                     }
                     if !(register == &Register::Eax
@@ -698,8 +703,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
                         || register == &Register::Esp)
                     {
                         return Err(Error::CannotParseInstruction(
-                            "invalid effective address (must use only valid 32-bit registers)"
-                                .into(),
+                            format!("invalid effective address (must use only valid 32-bit registers, tried to use {})", register)
                         ));
                     }
                 }
@@ -760,13 +764,15 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
         // 0h...              = hex
         let parse = |value: &str, radix: u32, radix_name: &str| {
             let parsed = u64::from_str_radix(value, radix).map_err(|_| {
-                Error::CannotParseInstruction(format!("could not parse {} as {}", value, radix_name))
+                Error::CannotParseInstruction(format!(
+                    "could not parse {} as {}",
+                    value, radix_name
+                ))
             })?;
             return Ok(Immediate {
                 raw: value.into(),
                 parsed,
             });
-
         };
 
         if value.0.len() > 1 {
@@ -808,10 +814,9 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
             }
         }
 
-        let parsed = value
-            .0
-            .parse::<u64>()
-            .map_err(|_| Error::CannotCovertType(format!("invalid immediate value ({})", value.0)))?;
+        let parsed = value.0.parse::<u64>().map_err(|_| {
+            Error::CannotCovertType(format!("invalid immediate value ({})", value.0))
+        })?;
 
         Ok(Immediate {
             raw: value.0.to_string(),
@@ -878,15 +883,15 @@ impl TryFrom<&NasmStr<'_>> for Size {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Operand {
-    operand_type: OperandType,
     size_directive: Option<Size>,
+    operand_type: OperandType,
 }
 
 impl Operand {
     pub fn new(operand_type: OperandType, size_directive: Option<Size>) -> Self {
         Self {
-            operand_type,
             size_directive,
+            operand_type,
         }
     }
 }
@@ -894,8 +899,41 @@ impl Operand {
 impl TryFrom<&NasmStr<'_>> for Operand {
     type Error = Error;
 
-    fn try_from(operand: &NasmStr<'_>) -> Result<Self, Self::Error> {
-        todo!()
+    fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
+        let index = if let Some(index) = value.0.find('[') {
+            Some(index)
+        } else if let Some(index) = value.0.find(' ') {
+            Some(index)
+        } else {
+            None
+        };
+
+        // FIXME: There is probably a more idiomatic and clear way to achieve this without breaking
+        //        out of a named block. In short, we split on the index which we think may be
+        //        separating the `size_directive` and `operand_type`, but if we can't then parse
+        //        the first part of that split as a `Size`, then that means the entire thing should
+        //        be parsed as an `OperandType` and we need to try again. So, in the current
+        //        implementation, if we fail to parse the `Size`, then we break out and fall
+        //        through to the case where we try to parse everything.
+        'size_directive: {
+            if let Some(index) = index {
+                let Ok(size_directive) = Size::try_from(&NasmStr(&value.0[..index].trim())) else {
+                break 'size_directive;
+            };
+
+                let operand_type = OperandType::try_from(&NasmStr(&value.0[index..].trim()))?;
+                return Ok(Self {
+                    size_directive: Some(size_directive),
+                    operand_type,
+                });
+            }
+        }
+
+        let operand_type = OperandType::try_from(&NasmStr(&value.0.trim()))?;
+        Ok(Self {
+            size_directive: None,
+            operand_type,
+        })
     }
 }
 
@@ -1004,5 +1042,13 @@ mod tests {
         };
         let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
         assert_eq!(immediate, expected_immediate);
+    }
+
+    #[test]
+    fn operand_from_nasm_str() {
+        assert!(Operand::try_from(&NasmStr("WORDEBX")).is_err());
+        assert!(Operand::try_from(&NasmStr(" wordax ")).is_err());
+        assert!(Operand::try_from(&NasmStr("WORD2")).is_err());
+        assert!(Operand::try_from(&NasmStr("wor eax")).is_err());
     }
 }
