@@ -1347,13 +1347,13 @@ impl TryFrom<&NasmStr<'_>> for Operand {
 #[derive(Debug)]
 pub struct NasmStr<'a>(pub &'a str);
 
-pub struct Instruction<'a> {
-    mnemonic: &'a str,
+pub struct Instruction {
+    mnemonic: String,
     operands: Vec<Operand>,
-    cpu_function: &'static CpuFunction,
+    cpu_function: CpuFunction,
 }
 
-impl<'a> TryFrom<NasmStr<'a>> for Instruction<'_> {
+impl<'a> TryFrom<NasmStr<'a>> for Instruction {
     type Error = Error;
 
     fn try_from(instruction: NasmStr) -> Result<Self, Self::Error> {
@@ -1375,7 +1375,7 @@ impl<'a> TryFrom<NasmStr<'a>> for Instruction<'_> {
             InstructionDescriptor::lookup_using_mnemonic_and_operands(mnemonic, &operands)?;
 
         Ok(Self {
-            mnemonic,
+            mnemonic: mnemonic.into(),
             operands,
             cpu_function,
         })
