@@ -1,9 +1,12 @@
-use std::{u32, fmt::Display};
+use std::{fmt::Display, u32};
 
 use bitmaps::Bitmap;
 use paste::paste;
 
-use crate::{error::Error, instruction::NasmStr};
+use crate::{
+    error::Error,
+    instruction::{NasmStr, Size},
+};
 
 trait HighLowBytes32 {
     fn get_high(&self) -> u16;
@@ -230,22 +233,33 @@ impl Eflags {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Register {
     Eax,
+    Ax,
+    Ah,
+    Al,
 
     Ebx,
+    Bx,
+    Bh,
+    Bl,
 
     Ecx,
+    Cx,
+    Ch,
+    Cl,
 
     Edx,
+    Dx,
+    Dh,
+    Dl,
 
     Edi,
     Esi,
-
     Ebp,
     Esp,
 
     Eflags,
-
     Eip,
+
     Cs,
     Ds,
     Es,
@@ -254,21 +268,52 @@ pub enum Register {
     Ss,
 }
 
+impl Register {
+    pub fn size(&self) -> Size {
+        use Register::*;
+        use Size::*;
+
+        match self {
+            Eax | Ebx | Ecx | Edx | Edi | Esi | Ebp | Esp | Eflags | Eip => Dword,
+            Ax | Bx | Cx | Dx | Cs | Ds | Es | Fs | Gs | Ss => Word,
+            Ah | Al | Bh | Bl | Ch | Cl | Dh | Dl => Byte,
+        }
+    }
+}
+
 impl Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Register::*;
 
         let register = match self {
             Eax => "EAX",
+            Ax => "AX",
+            Ah => "AH",
+            Al => "AL",
+
             Ebx => "EBX",
+            Bx => "BX",
+            Bh => "BH",
+            Bl => "BL",
+
             Ecx => "ECX",
+            Cx => "CX",
+            Ch => "CH",
+            Cl => "CL",
+
             Edx => "EDX",
+            Dx => "DX",
+            Dh => "DH",
+            Dl => "DL",
+
             Edi => "EDI",
             Esi => "ESI",
             Ebp => "EBP",
             Esp => "ESP",
+
             Eflags => "EFLAGS",
             Eip => "EIP",
+
             Cs => "CS",
             Ds => "DS",
             Es => "ES",
@@ -285,24 +330,47 @@ impl TryFrom<&NasmStr<'_>> for Register {
     type Error = Error;
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
+        use Register::*;
+
         match value.0.to_lowercase().as_str() {
-            "eax" => Ok(Register::Eax),
-            "ebx" => Ok(Register::Ebx),
-            "ecx" => Ok(Register::Ecx),
-            "edx" => Ok(Register::Edx),
-            "edi" => Ok(Register::Edi),
-            "esi" => Ok(Register::Esi),
-            "ebp" => Ok(Register::Ebp),
-            "esp" => Ok(Register::Esp),
-            "eflags" => Ok(Register::Eflags),
-            "eip" => Ok(Register::Eip),
-            "cs" => Ok(Register::Cs),
-            "ds" => Ok(Register::Ds),
-            "es" => Ok(Register::Es),
-            "fs" => Ok(Register::Fs),
-            "gs" => Ok(Register::Gs),
-            "ss" => Ok(Register::Ss),
-            _ => Err(Error::CannotParseInstruction(format!("{} is not a valid register", value.0)))
+            "eax" => Ok(Eax),
+            "ax" => Ok(Ax),
+            "ah" => Ok(Ah),
+            "al" => Ok(Al),
+
+            "ebx" => Ok(Ebx),
+            "bx" => Ok(Bx),
+            "bh" => Ok(Bh),
+            "bl" => Ok(Bl),
+
+            "ecx" => Ok(Ecx),
+            "cx" => Ok(Cx),
+            "ch" => Ok(Ch),
+            "cl" => Ok(Cl),
+
+            "edx" => Ok(Edx),
+            "dx" => Ok(Dx),
+            "dh" => Ok(Dh),
+            "dl" => Ok(Dl),
+
+            "edi" => Ok(Edi),
+            "esi" => Ok(Esi),
+            "ebp" => Ok(Ebp),
+            "esp" => Ok(Esp),
+
+            "eflags" => Ok(Eflags),
+            "eip" => Ok(Eip),
+
+            "cs" => Ok(Cs),
+            "ds" => Ok(Ds),
+            "es" => Ok(Es),
+            "fs" => Ok(Fs),
+            "gs" => Ok(Gs),
+            "ss" => Ok(Ss),
+            _ => Err(Error::CannotParseInstruction(format!(
+                "{} is not a valid register",
+                value.0
+            ))),
         }
     }
 }

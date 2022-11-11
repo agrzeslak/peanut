@@ -5,9 +5,9 @@ enum InstructionOperandFormat {
     Cs,
     Ds,
     Es,
-    Ss,
     Fs,
     Gs,
+    Ss,
     Const3,
     Imm8,
     Imm16,
@@ -92,6 +92,317 @@ enum InstructionOperandFormat {
     None,
 }
 
+impl InstructionOperandFormat {
+    /// Checks whether the `InstructionOperandFormat` is compatible with the operands provided.
+    /// I.e. can an instruction with this `InstructionOperandFormat` be executed on the operands
+    /// provided.
+    /// FIXME: I think we are currently too lax in what we allow. I think an operand format such as
+    ///        Mem32Imm32 would require that the immediate operand have a size directive. This may
+    ///        not be true and we currently don't enforce it (i.e. if we can use the immediate value
+    ///        as the desired size without overflowing, we do so silently). We do, however, fail
+    ///        with an error if which instruction we are to choose is ambiguous.
+    pub fn matches(&self, operands: &Vec<Operand>) -> bool {
+        // Validates that the operand is the correct immediate value.
+        let validate_const = |operand: &Operand, target: u64| -> bool {
+            if let OperandType::Immediate(immediate) = operand.operand_type() {
+                immediate.parsed() == target
+            } else {
+                false
+            }
+        };
+
+        // Validates that the immediate operand's size directive (if given) matches the target
+        // size. If no size directive is provided, then it is validates that the inferred size of
+        // the immediate value is smaller than, or equal to the target size.
+        let validate_immediate = |operand: &Operand, target_size: Size| -> bool {
+            let OperandType::Immediate(immediate) = operand.operand_type() else {
+                    return false;
+                };
+
+            if let Some(size_directive) = operand.size_directive() {
+                return size_directive == &target_size;
+            }
+
+            immediate.infer_size() <= target_size
+        };
+
+        // Validates that the register contained within this operand is of the specified
+        // `target_size`.
+        let validate_register = |operand: &Operand, target_size: Size| -> bool {
+            let OperandType::Register(register) = operand.operand_type() else {
+                return false;
+            };
+            register.size() == target_size
+        };
+
+        // Validates that the operand containing this effective address either does not have a size
+        // directive, or that it has a matching size directive.
+        let validate_memory = |operand: &Operand, target_size: Size| -> bool {
+            if let Some(size_directive) = operand.size_directive() {
+                return size_directive == &target_size;
+            }
+            true
+        };
+
+        // Validates that either a register or effective address has been provided. If it is a
+        // register, it should also be of the specified `target_size`.
+        let validate_register_or_memory = |operand: &Operand, target_size: Size| -> bool {
+            match operand.operand_type() {
+                OperandType::Memory(_) => true,
+                OperandType::Register(register) => register.size() == target_size,
+                _ => false,
+            }
+        };
+
+        use InstructionOperandFormat as F;
+        match (self, operands.get(0), operands.get(1), operands.get(2)) {
+            (F::Cs, Some(op), None, None) => {
+                op.operand_type() == &OperandType::Register(Register::Cs)
+            }
+            (F::Ds, Some(op), None, None) => {
+                op.operand_type() == &OperandType::Register(Register::Ds)
+            }
+            (F::Es, Some(op), None, None) => {
+                op.operand_type() == &OperandType::Register(Register::Es)
+            }
+            (F::Fs, Some(op), None, None) => {
+                op.operand_type() == &OperandType::Register(Register::Fs)
+            }
+            (F::Gs, Some(op), None, None) => {
+                op.operand_type() == &OperandType::Register(Register::Gs)
+            }
+            (F::Ss, Some(op), None, None) => {
+                op.operand_type() == &OperandType::Register(Register::Ss)
+            }
+            (F::Const3, Some(op), None, None) => validate_const(op, 3),
+            (F::Imm8, Some(op), None, None) => validate_immediate(op, Size::Byte),
+            (F::Imm16, Some(op), None, None) => validate_immediate(op, Size::Word),
+            (F::Imm32, Some(op), None, None) => validate_immediate(op, Size::Dword),
+            (F::Reg16, Some(op), None, None) => validate_register(op, Size::Word),
+            (F::Reg32, Some(op), None, None) => validate_register(op, Size::Dword),
+            (F::Reg8Imm8, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Byte) && validate_immediate(op2, Size::Byte)
+            }
+            (F::Reg16Imm16, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Word) && validate_immediate(op2, Size::Word)
+            }
+            (F::Reg32Imm32, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Dword) && validate_immediate(op2, Size::Dword)
+            }
+            // (F::Rel8, Some(op), None, None) => {},
+            // (F::Rel16, Some(op), None, None) => {},
+            // (F::Rel32, Some(op), None, None) => {},
+            (F::Rm8, Some(op), None, None) => validate_register_or_memory(op, Size::Byte),
+            (F::Rm16, Some(op), None, None) => validate_register_or_memory(op, Size::Word),
+            (F::Rm32, Some(op), None, None) => validate_register_or_memory(op, Size::Dword),
+            (F::Reg8Rm8, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Byte) && validate_register_or_memory(op2, Size::Byte)
+            }
+            (F::Reg16Rm16, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Word) && validate_register_or_memory(op2, Size::Word)
+            }
+            (F::Reg32Rm32, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Dword) && validate_register_or_memory(op2, Size::Dword)
+            }
+            (F::Rm8Reg8, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Byte) && validate_register(op2, Size::Byte)
+            }
+            (F::Rm16Reg16, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Word) && validate_register(op2, Size::Word)
+            }
+            (F::Rm32Reg32, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Dword) && validate_register(op2, Size::Dword)
+            }
+            // (F::Rm16Sreg, Some(op), None, None) => {},
+            // (F::Rm32Sreg, Some(op), None, None) => {},
+            (F::Rm8Imm8, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Byte) && validate_immediate(op2, Size::Byte)
+            }
+            (F::Rm16Imm16, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Word) && validate_immediate(op2, Size::Word)
+            }
+            (F::Rm16Imm8, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Word) && validate_immediate(op2, Size::Byte)
+            }
+            (F::Rm32Imm8, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Dword) && validate_immediate(op2, Size::Byte)
+            }
+            (F::Rm32Imm32, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Dword)
+                    && validate_immediate(op2, Size::Dword)
+            }
+            (F::Reg16Rm16Imm8, Some(op1), Some(op2), Some(op3)) => {
+                validate_register(op1, Size::Word)
+                    && validate_register_or_memory(op2, Size::Word)
+                    && validate_immediate(op3, Size::Byte)
+            }
+            (F::Reg16Rm16Imm16, Some(op1), Some(op2), Some(op3)) => {
+                validate_register(op1, Size::Word)
+                    && validate_register_or_memory(op2, Size::Word)
+                    && validate_immediate(op3, Size::Word)
+            }
+            (F::Reg32Rm32Imm8, Some(op1), Some(op2), Some(op3)) => {
+                validate_register(op1, Size::Dword)
+                    && validate_register_or_memory(op2, Size::Dword)
+                    && validate_immediate(op3, Size::Byte)
+            }
+            (F::Reg32Rm32Imm32, Some(op1), Some(op2), Some(op3)) => {
+                validate_register(op1, Size::Dword)
+                    && validate_register_or_memory(op2, Size::Dword)
+                    && validate_immediate(op3, Size::Dword)
+            }
+            (F::Reg16Mem16, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Word) && validate_memory(op2, Size::Word)
+            }
+            (F::Reg32Mem32, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Dword) && validate_memory(op2, Size::Dword)
+            }
+            // (F::SregRm16, Some(op), None, None) => {},
+            // (F::SregRm32, Some(op), None, None) => {},
+            (F::Rm8Const1, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Byte) && validate_const(op2, 1)
+            }
+            (F::Rm16Const1, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Word) && validate_const(op2, 1)
+            }
+            (F::Rm32Const1, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Dword) && validate_const(op2, 1)
+            }
+            // (F::Far16, Some(op), None, None) => {},
+            // (F::Far32, Some(op), None, None) => {},
+            (F::Rm8Cl, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Byte)
+                    && op2.operand_type() == &OperandType::Register(Register::Cl)
+            }
+            (F::Rm16Cl, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Word)
+                    && op2.operand_type() == &OperandType::Register(Register::Cl)
+            }
+            (F::Rm32Cl, Some(op1), Some(op2), None) => {
+                validate_register_or_memory(op1, Size::Dword)
+                    && op2.operand_type() == &OperandType::Register(Register::Cl)
+            }
+            // (F::Reg32Cr, Some(op1), Some(op2), None) => {},
+            // (F::Reg32Dr, Some(op1), Some(op2), None) => {},
+            // (F::CrReg32, Some(op1), Some(op2), None) => {},
+            // (F::DrReg32, Some(op1), Some(op2), None) => {},
+            (F::Reg16Rm8, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Word) && validate_register_or_memory(op2, Size::Byte)
+            }
+            (F::Reg32Rm8, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Dword) && validate_register_or_memory(op2, Size::Byte)
+            }
+            (F::Reg32Rm16, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Dword) && validate_register_or_memory(op2, Size::Word)
+            }
+            (F::Rm16Reg16Imm8, Some(op1), Some(op2), Some(op3)) => {
+                validate_register_or_memory(op1, Size::Word)
+                    && validate_register(op2, Size::Word)
+                    && validate_immediate(op3, Size::Byte)
+            }
+            (F::Rm32Reg32Imm8, Some(op1), Some(op2), Some(op3)) => {
+                validate_register_or_memory(op1, Size::Dword)
+                    && validate_register(op2, Size::Dword)
+                    && validate_immediate(op3, Size::Byte)
+            }
+            (F::Rm16Reg16Cl, Some(op1), Some(op2), Some(op3)) => {
+                validate_register_or_memory(op1, Size::Word)
+                    && validate_register(op2, Size::Word)
+                    && op3.operand_type() == &OperandType::Register(Register::Cl)
+            }
+            (F::Rm32Reg32Cl, Some(op1), Some(op2), Some(op3)) => {
+                validate_register_or_memory(op1, Size::Dword)
+                    && validate_register(op2, Size::Dword)
+                    && op3.operand_type() == &OperandType::Register(Register::Cl)
+            }
+            (F::AlImm8, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Al)
+                    && validate_immediate(op2, Size::Byte)
+            }
+            (F::AxImm16, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Ax)
+                    && validate_immediate(op2, Size::Word)
+            }
+            (F::EaxImm32, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Eax)
+                    && validate_immediate(op2, Size::Dword)
+            }
+            (F::Imm16Imm16, Some(op1), Some(op2), None) => {
+                validate_immediate(op1, Size::Word) && validate_immediate(op2, Size::Word)
+            }
+            (F::Imm16Imm32, Some(op1), Some(op2), None) => {
+                validate_immediate(op1, Size::Word) && validate_immediate(op2, Size::Dword)
+            }
+            (F::AxReg16, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Ax)
+                    && validate_register(op2, Size::Word)
+            }
+            (F::EaxReg32, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Eax)
+                    && validate_register(op2, Size::Dword)
+            }
+            (F::AxImm8, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Ax)
+                    && validate_immediate(op2, Size::Byte)
+            }
+            (F::EaxImm8, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Eax)
+                    && validate_immediate(op2, Size::Byte)
+            }
+            // (F::AlMoffs8, Some(op1), Some(op2), None) => {},
+            // (F::AxMoffs16, Some(op1), Some(op2), None) => {},
+            // (F::EaxMoffs32, Some(op1), Some(op2), None) => {},
+            // (F::Moffs8Al, Some(op1), Some(op2), None) => {},
+            // (F::Moffs16Ax, Some(op1), Some(op2), None) => {},
+            // (F::Moffs32Eax, Some(op1), Some(op2), None) => {},
+            (F::AlDx, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Al)
+                    && op2.operand_type() == &OperandType::Register(Register::Dx)
+            }
+            (F::AxDx, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Ax)
+                    && op2.operand_type() == &OperandType::Register(Register::Dx)
+            }
+            (F::EaxDx, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Eax)
+                    && op2.operand_type() == &OperandType::Register(Register::Dx)
+            }
+            (F::DxAl, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Dx)
+                    && op2.operand_type() == &OperandType::Register(Register::Al)
+            }
+            (F::DxAx, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Dx)
+                    && op2.operand_type() == &OperandType::Register(Register::Ax)
+            }
+            (F::DxEax, Some(op1), Some(op2), None) => {
+                op1.operand_type() == &OperandType::Register(Register::Dx)
+                    && op2.operand_type() == &OperandType::Register(Register::Eax)
+            }
+            (F::Imm8Al, Some(op1), Some(op2), None) => {
+                validate_immediate(op1, Size::Byte)
+                    && op2.operand_type() == &OperandType::Register(Register::Al)
+            }
+            (F::Imm8Ax, Some(op1), Some(op2), None) => {
+                validate_immediate(op1, Size::Byte)
+                    && op2.operand_type() == &OperandType::Register(Register::Ax)
+            }
+            (F::Imm8Eax, Some(op1), Some(op2), None) => {
+                validate_immediate(op1, Size::Byte)
+                    && op2.operand_type() == &OperandType::Register(Register::Eax)
+            }
+            (F::Imm8Imm16, Some(op1), Some(op2), None) => {
+                validate_immediate(op1, Size::Byte) && validate_immediate(op2, Size::Word)
+            }
+            (F::Reg8Cl, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Byte)
+                    && op2.operand_type() == &OperandType::Register(Register::Cl)
+            }
+            _ => false,
+        }
+    }
+}
+
 type CpuFunction = fn(&mut Cpu, &Instruction);
 
 struct OperandFunctionMap {
@@ -116,7 +427,78 @@ pub(crate) struct InstructionDescriptor<'a> {
     operand_function_map_8: Option<OperandFunctionMap>,
     operand_function_map_16: Option<OperandFunctionMap>,
     operand_function_map_32: Option<OperandFunctionMap>,
+    // FIXME: Unsure if this should be stored here, perhaps it should just be encoded within the
+    //        relevant CPU functions.
     lock_prefix: bool,
+}
+
+/// Finds the appropriate `InstructionDescriptor` based on the mnemonic and operands provided.
+/// Multiple instructions may share the same menmonic, but they should be differentiated by their
+/// operand sizes.
+impl<'a> InstructionDescriptor<'a> {
+    // FIXME: This will need to be refactored when we want to support more than just NASM, similarly
+    //        to how there are different `TryInto` implementations based on what type of instruction
+    //        format you are passing.
+    // FIXME: Signature could be made more ergonomic by accepting a borrowed iterator in some form.
+    pub fn lookup_using_mnemonic_and_operands(
+        mnemonic: &str,
+        operands: &Vec<Operand>,
+    ) -> Result<CpuFunction, Error> {
+        let mnemonic = mnemonic.to_uppercase();
+        let candidates: Vec<_> = INSTRUCTION_DESCRIPTORS
+            .iter()
+            .filter(|i| i.mnemonic == mnemonic)
+            .collect();
+
+        let mut matching_cpu_functions = Vec::new();
+        for candidate in &candidates {
+            if let Some(cpu_function) = candidate.resolve_matching_cpu_function(operands)? {
+                matching_cpu_functions.push(cpu_function);
+            }
+        }
+
+        match matching_cpu_functions.len() {
+            0 => Err(Error::NoMatchingInstruction(format!("an instruction could not be found that matches the mnemonic \"{mnemonic}\" and associated operands"))),
+            1 => Ok(*matching_cpu_functions.get(0).unwrap()),
+            _ => Err(Error::AmbiguousInstruction(format!("the mnemonic \"{mnemonic}\" and associated operands do not uniquely match a single instruction"))),
+        }
+    }
+
+    /// An `InstructionDescriptor` may have multiple `CpuFunction`, each for different operands.
+    /// For a given set of operands, this function will find the appropriate `CpuFunction`, if it
+    /// exists.
+    pub fn resolve_matching_cpu_function(
+        &self,
+        operands: &Vec<Operand>,
+    ) -> Result<Option<CpuFunction>, Error> {
+        let mut cpu_function = None;
+
+        if let Some(map) = &self.operand_function_map_8 {
+            if map.instruction_operand_format.matches(operands) {
+                cpu_function = Some(map.cpu_function);
+            }
+        };
+
+        if let Some(map) = &self.operand_function_map_16 {
+            if map.instruction_operand_format.matches(operands) {
+                if cpu_function.is_some() {
+                    return Err(Error::AmbiguousInstruction(format!("ambigious operand(s)")));
+                }
+                cpu_function = Some(map.cpu_function);
+            }
+        };
+
+        if let Some(map) = &self.operand_function_map_32 {
+            if map.instruction_operand_format.matches(operands) {
+                if cpu_function.is_some() {
+                    return Err(Error::AmbiguousInstruction(format!("ambigious operand(s)")));
+                }
+                cpu_function = Some(map.cpu_function);
+            }
+        };
+
+        Ok(cpu_function)
+    }
 }
 
 macro_rules! expand_operand_function_mapping {
@@ -544,10 +926,6 @@ pub(crate) fn lookup_instructions_by_mnemonic(mnemonic: &str) -> Vec<&Instructio
         .collect()
 }
 
-pub(crate) fn lookup_instruction_by_opcode(mnemonic: &str) -> Option<InstructionDescriptor> {
-    todo!()
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EffectiveAddressOperator {
     Add,
@@ -624,12 +1002,12 @@ impl EffectiveAddress {
         operand: EffectiveAddressOperand,
     ) -> Result<(), Error> {
         if let EffectiveAddressOperand::Register(_) = operand {
+            self.num_registers += 1;
             if self.num_registers > 2 {
                 return Err(Error::CannotParseInstruction(
                     "a memory address cannot be computed from more than two registers".into(),
                 ));
             }
-            self.num_registers += 1;
         }
         self.sequence.push((operator, operand));
         Ok(())
@@ -640,7 +1018,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
     type Error = Error;
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
-        let mut remainder = value.0;
+        let remainder = value.0;
         let mut chars = remainder.chars();
         if chars.nth(0).unwrap() != '[' {
             return Err(Error::CannotParseInstruction(
@@ -660,7 +1038,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
             ));
         }
 
-        let inner = &remainder[1..remainder.len() - 1].to_lowercase();
+        let inner = &remainder[1..remainder.len() - 1].trim().to_lowercase();
         let mut operator = EffectiveAddressOperator::Add;
         let mut memory_operand_sequence = EffectiveAddress::new();
         for mut token in inner.split_inclusive(&['+', '-', '*']) {
@@ -668,12 +1046,14 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
                 EffectiveAddressOperator::try_from(token.chars().last().unwrap())
             {
                 // Remove the trailing operand and trim since whitespace is irrelevant.
-                token = token[0..token.len() - 1].trim();
+                token = &token[0..token.len() - 1];
                 next_operator
             } else {
                 // Irrelevant: this is the final iteration.
                 EffectiveAddressOperator::Add
             };
+
+            token = token.trim();
             let operand = EffectiveAddressOperand::try_from(&NasmStr(token))?;
             match &operand {
                 EffectiveAddressOperand::Immediate(immediate) => {
@@ -723,11 +1103,8 @@ pub struct Immediate {
 }
 
 impl Immediate {
-    pub fn new(raw: &str, parsed: u64) -> Self {
-        Self {
-            raw: raw.into(),
-            parsed,
-        }
+    pub fn new(parsed: u64, raw: String) -> Self {
+        Self { raw, parsed }
     }
 
     pub fn raw(&self) -> &str {
@@ -736,6 +1113,28 @@ impl Immediate {
 
     pub fn parsed(&self) -> u64 {
         self.parsed
+    }
+
+    pub fn infer_size(&self) -> Size {
+        const BYTE_LOW: u64 = 0;
+        const BYTE_HIGH: u64 = u8::MAX as u64;
+
+        const WORD_LOW: u64 = u8::MAX as u64 + 1;
+        const WORD_HIGH: u64 = u16::MAX as u64;
+
+        const DWORD_LOW: u64 = u16::MAX as u64 + 1;
+        const DWORD_HIGH: u64 = u32::MAX as u64;
+
+        const QWORD_LOW: u64 = u32::MAX as u64 + 1;
+        const QWORD_HIGH: u64 = u64::MAX as u64;
+
+        use Size::*;
+        match self.parsed {
+            BYTE_LOW..=BYTE_HIGH => Byte,
+            WORD_LOW..=WORD_HIGH => Word,
+            DWORD_LOW..=DWORD_HIGH => Dword,
+            QWORD_LOW..=QWORD_HIGH => Qword,
+        }
     }
 }
 
@@ -762,15 +1161,15 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
         // ..h (where first char is numberic) = hex
         // 0x...              = hex
         // 0h...              = hex
-        let parse = |value: &str, radix: u32, radix_name: &str| {
-            let parsed = u64::from_str_radix(value, radix).map_err(|_| {
+        let parse = |trimmed_value: &str, radix: u32, radix_name: &str| {
+            let parsed = u64::from_str_radix(trimmed_value, radix).map_err(|_| {
                 Error::CannotParseInstruction(format!(
                     "could not parse {} as {}",
-                    value, radix_name
+                    trimmed_value, radix_name
                 ))
             })?;
             return Ok(Immediate {
-                raw: value.into(),
+                raw: value.0.into(),
                 parsed,
             });
         };
@@ -815,7 +1214,7 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
         }
 
         let parsed = value.0.parse::<u64>().map_err(|_| {
-            Error::CannotCovertType(format!("invalid immediate value ({})", value.0))
+            Error::CannotParseInstruction(format!("invalid immediate value ({})", value.0))
         })?;
 
         Ok(Immediate {
@@ -848,19 +1247,19 @@ impl TryFrom<&NasmStr<'_>> for OperandType {
             return Ok(Self::Register(register));
         }
 
-        Err(Error::CannotCovertType(format!(
-            "cannot convert {} (NASM format) into a valid operand type",
+        Err(Error::CannotParseInstruction(format!(
+            "cannot convert \"{}\" (NASM format) into a valid operand type",
             nasm_str.0
         )))
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Size {
-    Byte,
-    Word,
-    Dword,
-    Qword,
+    Byte = 8,
+    Word = 16,
+    Dword = 32,
+    Qword = 64,
 }
 
 impl TryFrom<&NasmStr<'_>> for Size {
@@ -883,16 +1282,24 @@ impl TryFrom<&NasmStr<'_>> for Size {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Operand {
-    size_directive: Option<Size>,
     operand_type: OperandType,
+    size_directive: Option<Size>,
 }
 
 impl Operand {
     pub fn new(operand_type: OperandType, size_directive: Option<Size>) -> Self {
         Self {
-            size_directive,
             operand_type,
+            size_directive,
         }
+    }
+
+    pub fn operand_type(&self) -> &OperandType {
+        &self.operand_type
+    }
+
+    pub fn size_directive(&self) -> &Option<Size> {
+        &self.size_directive
     }
 }
 
@@ -900,56 +1307,78 @@ impl TryFrom<&NasmStr<'_>> for Operand {
     type Error = Error;
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
-        let index = if let Some(index) = value.0.find('[') {
-            Some(index)
+        let mut index = if let Some(index) = value.0.find('[') {
+            index
         } else if let Some(index) = value.0.find(' ') {
-            Some(index)
+            index
+        } else {
+            0
+        };
+
+        let minimum_size_directive_length = 4;
+        let mut size_directive = if index >= minimum_size_directive_length {
+            Size::try_from(&NasmStr(&value.0[..index].trim())).ok()
         } else {
             None
         };
 
-        // FIXME: There is probably a more idiomatic and clear way to achieve this without breaking
-        //        out of a named block. In short, we split on the index which we think may be
-        //        separating the `size_directive` and `operand_type`, but if we can't then parse
-        //        the first part of that split as a `Size`, then that means the entire thing should
-        //        be parsed as an `OperandType` and we need to try again. So, in the current
-        //        implementation, if we fail to parse the `Size`, then we break out and fall
-        //        through to the case where we try to parse everything.
-        'size_directive: {
-            if let Some(index) = index {
-                let Ok(size_directive) = Size::try_from(&NasmStr(&value.0[..index].trim())) else {
-                break 'size_directive;
-            };
+        if size_directive.is_none() {
+            index = 0;
+        }
 
-                let operand_type = OperandType::try_from(&NasmStr(&value.0[index..].trim()))?;
-                return Ok(Self {
-                    size_directive: Some(size_directive),
-                    operand_type,
-                });
+        let operand_type = OperandType::try_from(&NasmStr(&value.0[index..].trim()))?;
+        if let Some(size) = &size_directive {
+            if let OperandType::Register(register) = &operand_type {
+                if size != &register.size() {
+                    // Size directive does not match register size. NASM ignores the size directive
+                    // in this case.
+                    size_directive = None;
+                }
             }
         }
 
-        let operand_type = OperandType::try_from(&NasmStr(&value.0.trim()))?;
         Ok(Self {
-            size_directive: None,
             operand_type,
+            size_directive,
         })
     }
 }
 
+#[derive(Debug)]
 pub struct NasmStr<'a>(pub &'a str);
 
 pub struct Instruction<'a> {
-    instruction_descriptor: &'a InstructionDescriptor<'a>,
-    operands: Vec<OperandType>,
+    mnemonic: &'a str,
+    operands: Vec<Operand>,
+    cpu_function: &'static CpuFunction,
 }
 
 impl<'a> TryFrom<NasmStr<'a>> for Instruction<'_> {
     type Error = Error;
 
     fn try_from(instruction: NasmStr) -> Result<Self, Self::Error> {
-        // NasmInstructionStrParser::parse(instruction.0)
-        todo!()
+        let (mnemonic, remainder) =
+            instruction
+                .0
+                .split_once(" ")
+                .ok_or(Error::CannotParseInstruction(
+                    "no mnemonic available".into(),
+                ))?;
+
+        let operands: Vec<_> = remainder
+            .trim()
+            .split(",")
+            .map(|o| Operand::try_from(&NasmStr(o.trim())))
+            .collect::<Result<_, _>>()?;
+
+        let cpu_function =
+            InstructionDescriptor::lookup_using_mnemonic_and_operands(mnemonic, &operands)?;
+
+        Ok(Self {
+            mnemonic,
+            operands,
+            cpu_function,
+        })
     }
 }
 
@@ -958,97 +1387,430 @@ mod tests {
     use super::*;
 
     #[test]
+    fn instruction_operand_format_matches() {
+        use InstructionOperandFormat as F;
+
+        // macro_rules! matches {
+        //     ($format:ident allows $operand:tt, $($remainder:tt)*,) => {
+        //         assert!(InstructionOperandFormat::$format.matches)
+        //     }
+        //     ($format:ident allows $($operand:tt)+,) => {
+        //     };
+        // }
+
+        assert!(F::Cs.matches(&vec![Operand::try_from(&NasmStr("Cs")).unwrap()]));
+        assert!(!F::Cs.matches(&vec![Operand::try_from(&NasmStr("Ds")).unwrap()]));
+        // F::Es,
+        // F::Fs,
+        // F::Gs,
+        // F::Ss,
+        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("3")).unwrap()]));
+        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("WORD 3")).unwrap()]));
+        assert!(!F::Const3.matches(&vec![Operand::try_from(&NasmStr("4")).unwrap()]));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
+        assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
+        assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65535")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 65536")).unwrap()]));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("qword 1")).unwrap()]));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("[eax]")).unwrap()]));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("eax")).unwrap()]));
+        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("3")).unwrap()]));
+        // F::Reg16,
+        // F::Reg32,
+        // F::Reg8Imm8,
+        // F::Reg16Imm16,
+        // F::Reg32Imm32,
+        // F::Rel8,
+        // F::Rel16,
+        // F::Rel32,
+        // F::Rm8,
+        // F::Rm16,
+        // F::Rm32,
+        // F::Reg8Rm8,
+        // F::Reg16Rm16,
+        // F::Reg32Rm32,
+        // F::Rm8Reg8,
+        // F::Rm16Reg16,
+        // F::Rm32Reg32,
+        // F::Rm16Sreg,
+        // F::Rm32Sreg,
+        // F::Rm8Imm8,
+        // F::Rm16Imm16,
+        // F::Rm16Imm8,
+        // F::Rm32Imm8,
+        // F::Rm32Imm32,
+        // F::Reg16Rm16Imm8,
+        // F::Reg16Rm16Imm16,
+        // F::Reg32Rm32Imm8,
+        // F::Reg32Rm32Imm32,
+        // F::Reg16Mem16,
+        // F::Reg32Mem32,
+        // F::SregRm16,
+        // F::SregRm32,
+        // F::Rm8Const1,
+        // F::Rm16Const1,
+        // F::Rm32Const1,
+        // F::Far16,
+        // F::Far32,
+        // F::Rm8Cl,
+        // F::Rm16Cl,
+        // F::Rm32Cl,
+        // F::Reg32Cr,
+        // F::Reg32Dr,
+        // F::CrReg32,
+        // F::DrReg32,
+        // F::Reg16Rm8,
+        // F::Reg32Rm8,
+        // F::Reg32Rm16,
+        // F::Rm16Reg16Imm8,
+        // F::Rm32Reg32Imm8,
+        // F::Rm16Reg16Cl,
+        // F::Rm32Reg32Cl,
+        // F::AlImm8,
+        // F::AxImm16,
+        // F::EaxImm32,
+        // F::Imm16Imm16,
+        // F::Imm16Imm32,
+        // F::AxReg16,
+        // F::EaxReg32,
+        // F::AxImm8,
+        // F::EaxImm8,
+        // F::AlMoffs8,
+        // F::AxMoffs16,
+        // F::EaxMoffs32,
+        // F::Moffs8Al,
+        // F::Moffs16Ax,
+        // F::Moffs32Eax,
+        // F::AlDx,
+        // F::AxDx,
+        // F::EaxDx,
+        // F::DxAl,
+        // F::DxAx,
+        // F::DxEax,
+        // F::Imm8Al,
+        // F::Imm8Ax,
+        // F::Imm8Eax,
+        // F::Imm8Imm16,
+        // F::Reg8Cl,
+        // F::None,
+    }
+
+    #[test]
+    fn effective_address_try_from_nasm_str() {
+        assert!(EffectiveAddress::try_from(&NasmStr("1")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("0x100")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("a[eax]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eax]a")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eax")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("eax]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr(" [eax] ")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eax+ebx+ecx]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eax+ax]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[ax+al]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[ah+al]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[ax]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eax-ebx]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eax*10]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eax/10]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eflags]")).is_err());
+        assert!(EffectiveAddress::try_from(&NasmStr("[eip]")).is_err());
+
+        let to_parse = "[eax]";
+        let expected = EffectiveAddress {
+            sequence: vec![(
+                EffectiveAddressOperator::Add,
+                EffectiveAddressOperand::Register(Register::Eax),
+            )],
+            num_registers: 1,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
+
+        let to_parse = "[     eAx     ]";
+        let expected = EffectiveAddress {
+            sequence: vec![(
+                EffectiveAddressOperator::Add,
+                EffectiveAddressOperand::Register(Register::Eax),
+            )],
+            num_registers: 1,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
+
+        let to_parse = "[eax+ebx]";
+        let expected = EffectiveAddress {
+            sequence: vec![
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Eax),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Ebx),
+                ),
+            ],
+            num_registers: 2,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
+
+        let to_parse = "[ eax  +  4 ]";
+        let expected = EffectiveAddress {
+            sequence: vec![
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Eax),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("4")).unwrap()),
+                ),
+            ],
+            num_registers: 1,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
+
+        let to_parse = "[eax-10]";
+        let expected = EffectiveAddress {
+            sequence: vec![
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Eax),
+                ),
+                (
+                    EffectiveAddressOperator::Subtract,
+                    EffectiveAddressOperand::Immediate(
+                        Immediate::try_from(&NasmStr("10")).unwrap(),
+                    ),
+                ),
+            ],
+            num_registers: 1,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
+
+        let to_parse = "[8*4+ebx]";
+        let expected = EffectiveAddress {
+            sequence: vec![
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("8")).unwrap()),
+                ),
+                (
+                    EffectiveAddressOperator::Multiply,
+                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("4")).unwrap()),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Ebx),
+                ),
+            ],
+            num_registers: 1,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
+
+        let to_parse = "[eax*2+4000q+2000h*8+0x8000+10d+020d+ebx*0b1]";
+        let expected = EffectiveAddress {
+            sequence: vec![
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Eax),
+                ),
+                (
+                    EffectiveAddressOperator::Multiply,
+                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("2")).unwrap()),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Immediate(
+                        Immediate::try_from(&NasmStr("4000q")).unwrap(),
+                    ),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Immediate(
+                        Immediate::try_from(&NasmStr("2000h")).unwrap(),
+                    ),
+                ),
+                (
+                    EffectiveAddressOperator::Multiply,
+                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("8")).unwrap()),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Immediate(
+                        Immediate::try_from(&NasmStr("0x8000")).unwrap(),
+                    ),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Immediate(
+                        Immediate::try_from(&NasmStr("10d")).unwrap(),
+                    ),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Immediate(
+                        Immediate::try_from(&NasmStr("020d")).unwrap(),
+                    ),
+                ),
+                (
+                    EffectiveAddressOperator::Add,
+                    EffectiveAddressOperand::Register(Register::Ebx),
+                ),
+                (
+                    EffectiveAddressOperator::Multiply,
+                    EffectiveAddressOperand::Immediate(
+                        Immediate::try_from(&NasmStr("0b1")).unwrap(),
+                    ),
+                ),
+            ],
+            num_registers: 2,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
     fn immediate_try_from_nasm_str() {
         assert!(Immediate::try_from(&NasmStr("00d200")).is_err());
         assert!(Immediate::try_from(&NasmStr("c0h")).is_err());
+        assert!(Immediate::try_from(&NasmStr(" 1 ")).is_err());
 
-        let input = "0x200";
+        let to_parse = "0x200";
         let expected_parsed = 512;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
-        let input = "0h200";
+        let to_parse = "0h200";
         let expected_parsed = 512;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
-        let input = "000200h";
+        let to_parse = "000200h";
         let expected_parsed = 512;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
-        let input = "0d200";
+        let to_parse = "0d200";
         let expected_parsed = 200;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
-        let input = "200d";
+        let to_parse = "200d";
         let expected_parsed = 200;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
-        let input = "0q0200";
+        let to_parse = "0q0200";
         let expected_parsed = 128;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
-        let input = "000000000000000000000000000000000000000000000000000000200q";
+        let to_parse = "000000000000000000000000000000000000000000000000000000200q";
         let expected_parsed = 128;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
-        let input = "0b00101";
+        let to_parse = "0b00101";
         let expected_parsed = 5;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
-        let input = "000000000000000000000000000000000000000000000000000000000000000000000000101b";
+        let to_parse =
+            "000000000000000000000000000000000000000000000000000000000000000000000000101b";
         let expected_parsed = 5;
         let expected_immediate = Immediate {
-            raw: input.into(),
+            raw: to_parse.into(),
             parsed: expected_parsed,
         };
-        let immediate = Immediate::try_from(&NasmStr(input)).unwrap();
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
     }
 
     #[test]
-    fn operand_from_nasm_str() {
+    fn operand_try_from_nasm_str() {
         assert!(Operand::try_from(&NasmStr("WORDEBX")).is_err());
         assert!(Operand::try_from(&NasmStr(" wordax ")).is_err());
+        assert!(Operand::try_from(&NasmStr("word [ax]")).is_err());
         assert!(Operand::try_from(&NasmStr("WORD2")).is_err());
         assert!(Operand::try_from(&NasmStr("wor eax")).is_err());
+
+        let to_parse = NasmStr(" DWORD[EAX]");
+        let expected = Operand::new(
+            OperandType::Memory(EffectiveAddress::try_from(&NasmStr("[EAX]")).unwrap()),
+            Some(Size::Dword),
+        );
+        assert_eq!(Operand::try_from(&to_parse).unwrap(), expected);
+
+        let to_parse = NasmStr("dWoRd 32");
+        let expected = Operand::new(
+            OperandType::Immediate(Immediate::try_from(&NasmStr("32")).unwrap()),
+            Some(Size::Dword),
+        );
+        assert_eq!(Operand::try_from(&to_parse).unwrap(), expected);
+
+        let to_parse = NasmStr("byte EAX");
+        let expected = Operand::new(OperandType::Register(Register::Eax), None);
+        assert_eq!(Operand::try_from(&to_parse).unwrap(), expected);
+
+        let to_parse = NasmStr("    qWORd     [EAX+EBX*4+0x10]");
+        let expected = Operand::new(
+            OperandType::Memory(EffectiveAddress::try_from(&NasmStr("[EAX+EBX*4+0x10]")).unwrap()),
+            Some(Size::Qword),
+        );
+        assert_eq!(Operand::try_from(&to_parse).unwrap(), expected);
     }
 }
