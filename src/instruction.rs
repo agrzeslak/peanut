@@ -1,4 +1,4 @@
-use crate::{cpu::Cpu, error::Error, parser::NasmInstructionStrParser, register::Register};
+use crate::{cpu::Cpu, error::Error, register::Register};
 
 #[derive(Debug)]
 enum InstructionOperandFormat {
