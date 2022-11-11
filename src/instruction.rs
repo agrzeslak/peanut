@@ -1353,10 +1353,10 @@ pub struct Instruction {
     cpu_function: CpuFunction,
 }
 
-impl<'a> TryFrom<NasmStr<'a>> for Instruction {
+impl<'a> TryFrom<&NasmStr<'a>> for Instruction {
     type Error = Error;
 
-    fn try_from(instruction: NasmStr) -> Result<Self, Self::Error> {
+    fn try_from(instruction: &NasmStr) -> Result<Self, Self::Error> {
         let (mnemonic, remainder) =
             instruction
                 .0
