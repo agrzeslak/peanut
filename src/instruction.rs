@@ -1018,6 +1018,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
     type Error = Error;
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
+        // FIXME: This entire function is far too complex and should be simplified.
         let remainder = value.0;
         let mut chars = remainder.chars();
         if chars.nth(0).unwrap() != '[' {
@@ -1041,6 +1042,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
         let inner = &remainder[1..remainder.len() - 1].trim().to_lowercase();
         let mut operator = EffectiveAddressOperator::Add;
         let mut memory_operand_sequence = EffectiveAddress::new();
+        let mut first_iteration = true;
         for mut token in inner.split_inclusive(&['+', '-', '*']) {
             let next_operator = if let Ok(next_operator) =
                 EffectiveAddressOperator::try_from(token.chars().last().unwrap())
@@ -1052,6 +1054,18 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
                 // Irrelevant: this is the final iteration.
                 EffectiveAddressOperator::Add
             };
+
+            // Handles the case where there is an operator at the start of the effective address
+            // e.g. [+1]. In this case, the first split will be "+" and we need to keep this for
+            // the next iteration and move on.
+            if token.len() == 0 && first_iteration {
+                if next_operator == EffectiveAddressOperator::Multiply {
+                    return Err(Error::CannotParseInstruction(
+                        "an effective address cannot begin with a multiplication operator".into(),
+                    ));
+                }
+                continue;
+            }
 
             token = token.trim();
             let operand = EffectiveAddressOperand::try_from(&NasmStr(token))?;
@@ -1090,6 +1104,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
             }
             memory_operand_sequence.push(operator, operand)?;
             operator = next_operator;
+            first_iteration = false;
         }
 
         Ok(memory_operand_sequence)
@@ -1348,9 +1363,9 @@ impl TryFrom<&NasmStr<'_>> for Operand {
 pub struct NasmStr<'a>(pub &'a str);
 
 pub struct Instruction {
-    mnemonic: String,
-    operands: Vec<Operand>,
-    cpu_function: CpuFunction,
+    pub mnemonic: String,
+    pub operands: Vec<Operand>,
+    pub cpu_function: CpuFunction,
 }
 
 impl<'a> TryFrom<&NasmStr<'a>> for Instruction {
@@ -1500,6 +1515,32 @@ mod tests {
     }
 
     #[test]
+    fn effective_address_operator_try_from_char() {
+        assert!(EffectiveAddressOperator::try_from('/').is_err());
+        assert!(EffectiveAddressOperator::try_from('&').is_err());
+        assert_eq!(
+            EffectiveAddressOperator::try_from('+').unwrap(),
+            EffectiveAddressOperator::Add
+        );
+        assert_eq!(
+            EffectiveAddressOperator::try_from('-').unwrap(),
+            EffectiveAddressOperator::Subtract
+        );
+        assert_eq!(
+            EffectiveAddressOperator::try_from('*').unwrap(),
+            EffectiveAddressOperator::Multiply
+        );
+    }
+
+    #[test]
+    fn effective_address_operand_try_from_nasm_str() {
+        assert!(EffectiveAddressOperand::try_from(&NasmStr(" 1")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("1 ")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("[1]")).is_err());
+        // assert!(EffectiveAddressOperand::try_from(&NasmStr("+1")).is_err());
+    }
+
+    #[test]
     fn effective_address_try_from_nasm_str() {
         assert!(EffectiveAddress::try_from(&NasmStr("1")).is_err());
         assert!(EffectiveAddress::try_from(&NasmStr("0x100")).is_err());
@@ -1518,6 +1559,32 @@ mod tests {
         assert!(EffectiveAddress::try_from(&NasmStr("[eax/10]")).is_err());
         assert!(EffectiveAddress::try_from(&NasmStr("[eflags]")).is_err());
         assert!(EffectiveAddress::try_from(&NasmStr("[eip]")).is_err());
+
+        let to_parse = "[1]";
+        let expected = EffectiveAddress {
+            sequence: vec![(
+                EffectiveAddressOperator::Add,
+                EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("1")).unwrap()),
+            )],
+            num_registers: 0,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
+
+        let to_parse = "[+1]";
+        let expected = EffectiveAddress {
+            sequence: vec![(
+                EffectiveAddressOperator::Add,
+                EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("1")).unwrap()),
+            )],
+            num_registers: 0,
+        };
+        assert_eq!(
+            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            expected
+        );
 
         let to_parse = "[eax]";
         let expected = EffectiveAddress {
