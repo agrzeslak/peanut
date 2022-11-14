@@ -103,7 +103,7 @@ impl InstructionOperandFormat {
     ///        with an error if which instruction we are to choose is ambiguous.
     pub fn matches(&self, operands: &Vec<Operand>) -> bool {
         // Validates that the operand is the correct immediate value.
-        let validate_const = |operand: &Operand, target: u64| -> bool {
+        let validate_const = |operand: &Operand, target: i64| -> bool {
             if let OperandType::Immediate(immediate) = operand.operand_type() {
                 immediate.parsed() == target
             } else {
@@ -1114,11 +1114,11 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Immediate {
     raw: String,
-    parsed: u64,
+    parsed: i64,
 }
 
 impl Immediate {
-    pub fn new(parsed: u64, raw: String) -> Self {
+    pub fn new(parsed: i64, raw: String) -> Self {
         Self { raw, parsed }
     }
 
@@ -1126,22 +1126,22 @@ impl Immediate {
         &self.raw
     }
 
-    pub fn parsed(&self) -> u64 {
+    pub fn parsed(&self) -> i64 {
         self.parsed
     }
 
     pub fn infer_size(&self) -> Size {
-        const BYTE_LOW: u64 = 0;
-        const BYTE_HIGH: u64 = u8::MAX as u64;
+        const BYTE_LOW: i64 = i8::MIN as i64;
+        const BYTE_HIGH: i64 = i8::MAX as i64;
 
-        const WORD_LOW: u64 = u8::MAX as u64 + 1;
-        const WORD_HIGH: u64 = u16::MAX as u64;
+        const WORD_LOW: i64 = i16::MIN as i64;
+        const WORD_HIGH: i64 = i16::MAX as i64;
 
-        const DWORD_LOW: u64 = u16::MAX as u64 + 1;
-        const DWORD_HIGH: u64 = u32::MAX as u64;
+        const DWORD_LOW: i64 = i32::MIN as i64;
+        const DWORD_HIGH: i64 = i32::MAX as i64;
 
-        const QWORD_LOW: u64 = u32::MAX as u64 + 1;
-        const QWORD_HIGH: u64 = u64::MAX as u64;
+        const QWORD_LOW: i64 = i64::MIN as i64;
+        const QWORD_HIGH: i64 = i64::MAX as i64;
 
         use Size::*;
         match self.parsed {
@@ -1176,8 +1176,9 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
         // ..h (where first char is numberic) = hex
         // 0x...              = hex
         // 0h...              = hex
+        // FIXME: currently do not allow underscores e.g. 0b1100_1000
         let parse = |trimmed_value: &str, radix: u32, radix_name: &str| {
-            let parsed = u64::from_str_radix(trimmed_value, radix).map_err(|_| {
+            let parsed = i64::from_str_radix(trimmed_value, radix).map_err(|_| {
                 Error::CannotParseInstruction(format!(
                     "could not parse {} as {}",
                     trimmed_value, radix_name
@@ -1228,7 +1229,7 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
             }
         }
 
-        let parsed = value.0.parse::<u64>().map_err(|_| {
+        let parsed = value.0.parse::<i64>().map_err(|_| {
             Error::CannotParseInstruction(format!("invalid immediate value ({})", value.0))
         })?;
 
@@ -1427,8 +1428,9 @@ mod tests {
         assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65535")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 65536")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("32767")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 32767")).unwrap()]));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("32768")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("qword 1")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("[eax]")).unwrap()]));
