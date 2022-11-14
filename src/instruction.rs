@@ -1821,37 +1821,77 @@ mod tests {
         assert_eq!(immediate, expected_immediate);
     }
 
+    macro_rules! ot {
+        (imm $value:literal) => {
+            OperandType::Immediate(Immediate::try_from(&NasmStr($value)).unwrap())
+        };
+        (mem $value:literal) => {
+            OperandType::Memory(EffectiveAddress::try_from(&NasmStr($value)).unwrap())
+        };
+        (reg $value:literal) => {
+            OperandType::Register(Register::try_from(&NasmStr($value)).unwrap())
+        };
+    }
+
+    macro_rules! assert_o_err {
+        ($value:literal) => {
+            assert!(Operand::try_from(&NasmStr($value)).is_err())
+        };
+    }
+
+    macro_rules! o {
+        ($value:literal) => {
+            Operand::try_from(&NasmStr($value)).unwrap()
+        };
+    }
+
     #[test]
     fn operand_try_from_nasm_str() {
-        assert!(Operand::try_from(&NasmStr("WORDEBX")).is_err());
-        assert!(Operand::try_from(&NasmStr(" wordax ")).is_err());
-        assert!(Operand::try_from(&NasmStr("word [ax]")).is_err());
-        assert!(Operand::try_from(&NasmStr("WORD2")).is_err());
-        assert!(Operand::try_from(&NasmStr("wor eax")).is_err());
+        assert_o_err!("WORDEBX");
+        assert_o_err!(" wordax ");
+        assert_o_err!("word [ax]");
+        assert_o_err!("WORD2");
+        assert_o_err!("wor eax");
 
-        let to_parse = NasmStr(" DWORD[EAX]");
-        let expected = Operand::new(
-            OperandType::Memory(EffectiveAddress::try_from(&NasmStr("[EAX]")).unwrap()),
-            Some(Size::Dword),
-        );
-        assert_eq!(Operand::try_from(&to_parse).unwrap(), expected);
+        let expected = Operand::new(ot!(mem "[EAX]"), Some(Size::Dword));
+        assert_eq!(o!(" DWORD[EAX]"), expected);
 
-        let to_parse = NasmStr("dWoRd 32");
-        let expected = Operand::new(
-            OperandType::Immediate(Immediate::try_from(&NasmStr("32")).unwrap()),
-            Some(Size::Dword),
-        );
-        assert_eq!(Operand::try_from(&to_parse).unwrap(), expected);
+        let expected = Operand::new(ot!(imm "32"), Some(Size::Dword));
+        assert_eq!(o!("dWoRd 32"), expected);
 
-        let to_parse = NasmStr("byte EAX");
-        let expected = Operand::new(OperandType::Register(Register::Eax), None);
-        assert_eq!(Operand::try_from(&to_parse).unwrap(), expected);
+        let expected = Operand::new(ot!(reg "eax"), None);
+        assert_eq!(o!("byte EAX"), expected);
 
-        let to_parse = NasmStr("    qWORd     [EAX+EBX*4+0x10]");
-        let expected = Operand::new(
-            OperandType::Memory(EffectiveAddress::try_from(&NasmStr("[EAX+EBX*4+0x10]")).unwrap()),
-            Some(Size::Qword),
-        );
-        assert_eq!(Operand::try_from(&to_parse).unwrap(), expected);
+        let expected = Operand::new(ot!(mem "[EAX+EBX*4+0x10]"), Some(Size::Qword));
+        assert_eq!(o!("    qWORd     [EAX+EBX*4+0x10]"), expected);
+    }
+
+    macro_rules! assert_size_err {
+        ($value:literal) => {
+            assert!(Size::try_from(&NasmStr($value)).is_err())
+        };
+    }
+
+    macro_rules! size {
+        ($value:literal) => {
+            Size::try_from(&NasmStr($value)).unwrap()
+        };
+    }
+
+    #[test]
+    fn size_try_from_nasm_str() {
+        assert_size_err!(" byte");
+        assert_size_err!("byte ");
+        assert_size_err!("by te");
+
+        assert_eq!(size!("bYtE"), Size::Byte);
+        assert_eq!(size!("WORD"), Size::Word);
+        assert_eq!(size!("dword"), Size::Dword);
+        assert_eq!(size!("QworD"), Size::Qword);
+    }
+
+    #[test]
+    fn instruction_try_from_nasm_str() {
+        // TODO
     }
 }
