@@ -964,6 +964,19 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
         }
 
         if let Ok(register) = Register::try_from(value) {
+            if !(register == Register::Eax
+                || register == Register::Ebx
+                || register == Register::Ecx
+                || register == Register::Edx
+                || register == Register::Edi
+                || register == Register::Esi
+                || register == Register::Ebp
+                || register == Register::Esp)
+            {
+                return Err(Error::CannotParseInstruction(
+                    format!("invalid effective address (must use only valid 32-bit registers, tried to use {})", register)
+                ));
+            }
             return Ok(Self::Register(register));
         }
 
@@ -1078,26 +1091,13 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
                         )));
                     }
                 }
-                EffectiveAddressOperand::Register(register) => {
+                EffectiveAddressOperand::Register(_) => {
                     if operator == EffectiveAddressOperator::Subtract
                         || operator == EffectiveAddressOperator::Multiply
                     {
                         return Err(Error::CannotParseInstruction(
                             "invalid effective address (registers can only be added together)"
                                 .into(),
-                        ));
-                    }
-                    if !(register == &Register::Eax
-                        || register == &Register::Ebx
-                        || register == &Register::Ecx
-                        || register == &Register::Edx
-                        || register == &Register::Edi
-                        || register == &Register::Esi
-                        || register == &Register::Ebp
-                        || register == &Register::Esp)
-                    {
-                        return Err(Error::CannotParseInstruction(
-                            format!("invalid effective address (must use only valid 32-bit registers, tried to use {})", register)
                         ));
                     }
                 }
