@@ -1009,7 +1009,8 @@ impl EffectiveAddress {
         }
     }
 
-    pub fn push(
+    // TODO: Tests.
+    pub fn try_push(
         &mut self,
         operator: EffectiveAddressOperator,
         operand: EffectiveAddressOperand,
@@ -1024,6 +1025,20 @@ impl EffectiveAddress {
         }
         self.sequence.push((operator, operand));
         Ok(())
+    }
+
+    // FIXME: If this can be implemented under the TryFrom trait that would be great. Am having
+    //        issues with it conflicting with the core generic implementation.
+    // TODO: Tests.
+    pub fn try_from_iter<I>(iterator: I) -> Result<Self, Error>
+    where
+        I: IntoIterator<Item = (EffectiveAddressOperator, EffectiveAddressOperand)>,
+    {
+        let mut effective_address = EffectiveAddress::new();
+        for (operator, operand) in iterator {
+            effective_address.try_push(operator, operand)?;
+        }
+        Ok(effective_address)
     }
 }
 
@@ -1102,7 +1117,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
                     }
                 }
             }
-            memory_operand_sequence.push(operator, operand)?;
+            memory_operand_sequence.try_push(operator, operand)?;
             operator = next_operator;
             first_iteration = false;
         }
@@ -1536,250 +1551,165 @@ mod tests {
         );
     }
 
+    macro_rules! eao {
+        (imm $value:literal) => {
+            EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr($value)).unwrap())
+        };
+        (reg $value:literal) => {
+            EffectiveAddressOperand::Register(Register::try_from(&NasmStr($value)).unwrap())
+        };
+        ($value:literal) => {
+            EffectiveAddressOperand::try_from(&NasmStr($value)).unwrap()
+        };
+    }
+
+    macro_rules! assert_eao_err {
+        ($value:literal) => {
+            assert!(EffectiveAddressOperand::try_from(&NasmStr($value)).is_err())
+        };
+    }
+
+    macro_rules! assert_eao_imm {
+        ($value:literal) => {
+            let expected = eao!(imm $value);
+            let actual = eao!($value);
+            assert_eq!(expected, actual)
+        };
+    }
+
+    macro_rules! assert_eao_reg {
+        ($value:literal) => {
+            let expected = eao!(reg $value);
+            let actual = eao!($value);
+            assert_eq!(expected, actual)
+        };
+    }
+
     #[test]
     fn effective_address_operand_try_from_nasm_str() {
-        assert!(EffectiveAddressOperand::try_from(&NasmStr(" 1")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("1 ")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("[1]")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("*1")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("/1")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("1+eax")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("eax+1")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("1+1")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("eax+ebx")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("ax")).is_err());
-        assert!(EffectiveAddressOperand::try_from(&NasmStr("al")).is_err());
+        assert_eao_err!(" 1");
+        assert_eao_err!(" 1");
+        assert_eao_err!("1 ");
+        assert_eao_err!("[1]");
+        assert_eao_err!("*1");
+        assert_eao_err!("/1");
+        assert_eao_err!("1+eax");
+        assert_eao_err!("eax+1");
+        assert_eao_err!("1+1");
+        assert_eao_err!("eax+ebx");
+        assert_eao_err!("ax");
+        assert_eao_err!("al");
 
-        let expected = EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("+1")).unwrap());
-        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("+1")).unwrap(), expected);
+        assert_eao_imm!("+1");
+        assert_eao_imm!("1");
+        assert_eao_imm!("-1");
 
-        let expected = EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("1")).unwrap());
-        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("1")).unwrap(), expected);
+        assert_eao_reg!("eax");
+    }
 
-        let expected = EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("-1")).unwrap());
-        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("-1")).unwrap(), expected);
+    macro_rules! assert_ea_err {
+        ($value:literal) => {
+            assert!(EffectiveAddress::try_from(&NasmStr($value)).is_err());
+        };
+    }
 
-        let expected = EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("-1")).unwrap());
-        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("-1")).unwrap(), expected);
-
-        let expected = EffectiveAddressOperand::Register(Register::try_from(&NasmStr("eax")).unwrap());
-        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("eax")).unwrap(), expected);
+    macro_rules! ea {
+        ($value:literal) => {
+            EffectiveAddress::try_from(&NasmStr($value)).unwrap()
+        };
     }
 
     #[test]
     fn effective_address_try_from_nasm_str() {
-        assert!(EffectiveAddress::try_from(&NasmStr("1")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("0x100")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("a[eax]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eax]a")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eax")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("eax]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr(" [eax] ")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eax+ebx+ecx]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eax+ax]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[ax+al]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[ah+al]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[ax]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eax-ebx]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eax*10]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eax/10]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eflags]")).is_err());
-        assert!(EffectiveAddress::try_from(&NasmStr("[eip]")).is_err());
+        use EffectiveAddressOperator::*;
 
-        let to_parse = "[1]";
+        assert_ea_err!("1");
+        assert_ea_err!("0x100");
+        assert_ea_err!("a[eax]");
+        assert_ea_err!("[eax]a");
+        assert_ea_err!("[eax");
+        assert_ea_err!("eax]");
+        assert_ea_err!(" [eax] ");
+        assert_ea_err!("[eax+ebx+ecx]");
+        assert_ea_err!("[eax+ax]");
+        assert_ea_err!("[ax+al]");
+        assert_ea_err!("[ah+al]");
+        assert_ea_err!("[ax]");
+        assert_ea_err!("[eax-ebx]");
+        assert_ea_err!("[eax*10]");
+        assert_ea_err!("[eax/10]");
+        assert_ea_err!("[eflags]");
+        assert_ea_err!("[eip]");
+
         let expected = EffectiveAddress {
-            sequence: vec![(
-                EffectiveAddressOperator::Add,
-                EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("1")).unwrap()),
-            )],
+            sequence: vec![(Add, eao!(imm "1"))],
             num_registers: 0,
         };
-        assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
-            expected
-        );
+        assert_eq!(ea!("[1]"), expected);
 
-        let to_parse = "[+1]";
         let expected = EffectiveAddress {
-            sequence: vec![(
-                EffectiveAddressOperator::Add,
-                EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("1")).unwrap()),
-            )],
+            sequence: vec![(Add, eao!(imm "1"))],
             num_registers: 0,
         };
-        assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
-            expected
-        );
+        assert_eq!(ea!("[+1]"), expected);
 
-        let to_parse = "[eax]";
         let expected = EffectiveAddress {
-            sequence: vec![(
-                EffectiveAddressOperator::Add,
-                EffectiveAddressOperand::Register(Register::Eax),
-            )],
+            sequence: vec![(Add, eao!(reg "eax"))],
             num_registers: 1,
         };
-        assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
-            expected
-        );
+        assert_eq!(ea!("[eax]"), expected);
 
-        let to_parse = "[     eAx     ]";
         let expected = EffectiveAddress {
-            sequence: vec![(
-                EffectiveAddressOperator::Add,
-                EffectiveAddressOperand::Register(Register::Eax),
-            )],
+            sequence: vec![(Add, eao!(reg "eax"))],
             num_registers: 1,
         };
-        assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
-            expected
-        );
+        assert_eq!(ea!("[     eAx     ]"), expected);
 
-        let to_parse = "[eax+ebx]";
+        let expected = EffectiveAddress {
+            sequence: vec![(Add, eao!(reg "eax")), (Add, eao!(reg "ebx"))],
+            num_registers: 2,
+        };
+        assert_eq!(ea!("[eax+ebx]"), expected);
+
+        let expected = EffectiveAddress {
+            sequence: vec![(Add, eao!(reg "eax")), (Add, eao!(imm "4"))],
+            num_registers: 1,
+        };
+        assert_eq!(ea!("[ eax   +  4 ]"), expected);
+
+        let expected = EffectiveAddress {
+            sequence: vec![(Add, eao!(reg "eax")), (Subtract, eao!(imm "10"))],
+            num_registers: 1,
+        };
+        assert_eq!(ea!("[eax-10]"), expected);
+
         let expected = EffectiveAddress {
             sequence: vec![
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Register(Register::Eax),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Register(Register::Ebx),
-                ),
+                (Add, eao!(imm "8")),
+                (Multiply, eao!(imm "4")),
+                (Add, eao!(reg "ebx")),
+            ],
+            num_registers: 1,
+        };
+        assert_eq!(ea!("[8*4+ebx]"), expected);
+
+        let expected = EffectiveAddress {
+            sequence: vec![
+                (Add, eao!(reg "eax")),
+                (Multiply, eao!(imm "2")),
+                (Add, eao!(imm "4000q")),
+                (Add, eao!(imm "2000h")),
+                (Multiply, eao!(imm "8")),
+                (Add, eao!(imm "0x8000")),
+                (Add, eao!(imm "10d")),
+                (Add, eao!(imm "020d")),
+                (Add, eao!(reg "ebx")),
+                (Multiply, eao!(imm "0b1")),
             ],
             num_registers: 2,
         };
         assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
-            expected
-        );
-
-        let to_parse = "[ eax  +  4 ]";
-        let expected = EffectiveAddress {
-            sequence: vec![
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Register(Register::Eax),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("4")).unwrap()),
-                ),
-            ],
-            num_registers: 1,
-        };
-        assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
-            expected
-        );
-
-        let to_parse = "[eax-10]";
-        let expected = EffectiveAddress {
-            sequence: vec![
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Register(Register::Eax),
-                ),
-                (
-                    EffectiveAddressOperator::Subtract,
-                    EffectiveAddressOperand::Immediate(
-                        Immediate::try_from(&NasmStr("10")).unwrap(),
-                    ),
-                ),
-            ],
-            num_registers: 1,
-        };
-        assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
-            expected
-        );
-
-        let to_parse = "[8*4+ebx]";
-        let expected = EffectiveAddress {
-            sequence: vec![
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("8")).unwrap()),
-                ),
-                (
-                    EffectiveAddressOperator::Multiply,
-                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("4")).unwrap()),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Register(Register::Ebx),
-                ),
-            ],
-            num_registers: 1,
-        };
-        assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
-            expected
-        );
-
-        let to_parse = "[eax*2+4000q+2000h*8+0x8000+10d+020d+ebx*0b1]";
-        let expected = EffectiveAddress {
-            sequence: vec![
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Register(Register::Eax),
-                ),
-                (
-                    EffectiveAddressOperator::Multiply,
-                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("2")).unwrap()),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Immediate(
-                        Immediate::try_from(&NasmStr("4000q")).unwrap(),
-                    ),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Immediate(
-                        Immediate::try_from(&NasmStr("2000h")).unwrap(),
-                    ),
-                ),
-                (
-                    EffectiveAddressOperator::Multiply,
-                    EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("8")).unwrap()),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Immediate(
-                        Immediate::try_from(&NasmStr("0x8000")).unwrap(),
-                    ),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Immediate(
-                        Immediate::try_from(&NasmStr("10d")).unwrap(),
-                    ),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Immediate(
-                        Immediate::try_from(&NasmStr("020d")).unwrap(),
-                    ),
-                ),
-                (
-                    EffectiveAddressOperator::Add,
-                    EffectiveAddressOperand::Register(Register::Ebx),
-                ),
-                (
-                    EffectiveAddressOperator::Multiply,
-                    EffectiveAddressOperand::Immediate(
-                        Immediate::try_from(&NasmStr("0b1")).unwrap(),
-                    ),
-                ),
-            ],
-            num_registers: 2,
-        };
-        assert_eq!(
-            EffectiveAddress::try_from(&NasmStr(to_parse)).unwrap(),
+            ea!("[eax*2+4000q+2000h*8+0x8000+10d+020d+ebx*0b1]"),
             expected
         );
     }
