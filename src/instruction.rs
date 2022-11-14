@@ -1190,28 +1190,30 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
             });
         };
 
-        if value.0.len() > 1 {
-            let value_without_suffix = &value.0[..value.0.len() - 1];
-            if value.0.ends_with("b") {
+        let to_parse = value.0.replace('_', "");
+
+        if to_parse.len() > 1 {
+            let value_without_suffix = &to_parse[..to_parse.len() - 1];
+            if to_parse.ends_with("b") {
                 return parse(value_without_suffix, 2, "binary");
             }
 
-            if value.0.ends_with("q") {
+            if to_parse.ends_with("q") {
                 return parse(value_without_suffix, 8, "octal");
             }
 
-            if value.0.ends_with("d") {
+            if to_parse.ends_with("d") {
                 return parse(value_without_suffix, 10, "decimal");
             }
 
-            if value.0.chars().nth(0).unwrap().is_numeric() && value.0.ends_with("h") {
+            if to_parse.chars().nth(0).unwrap().is_numeric() && to_parse.ends_with("h") {
                 return parse(value_without_suffix, 16, "hexadecimal");
             }
         }
 
-        if value.0.len() > 2 {
-            let prefix = value.0[0..=1].to_lowercase();
-            let value_without_prefix = &value.0[2..];
+        if to_parse.len() > 2 {
+            let prefix = to_parse[0..=1].to_lowercase();
+            let value_without_prefix = &to_parse[2..];
             if prefix == "0b" {
                 return parse(value_without_prefix, 2, "binary");
             }
@@ -1229,12 +1231,12 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
             }
         }
 
-        let parsed = value.0.parse::<i64>().map_err(|_| {
-            Error::CannotParseInstruction(format!("invalid immediate value ({})", value.0))
+        let parsed = to_parse.parse::<i64>().map_err(|_| {
+            Error::CannotParseInstruction(format!("invalid immediate value ({})", to_parse))
         })?;
 
         Ok(Immediate {
-            raw: value.0.to_string(),
+            raw: to_parse,
             parsed,
         })
     }
@@ -1539,7 +1541,29 @@ mod tests {
         assert!(EffectiveAddressOperand::try_from(&NasmStr(" 1")).is_err());
         assert!(EffectiveAddressOperand::try_from(&NasmStr("1 ")).is_err());
         assert!(EffectiveAddressOperand::try_from(&NasmStr("[1]")).is_err());
-        // assert!(EffectiveAddressOperand::try_from(&NasmStr("+1")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("*1")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("/1")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("1+eax")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("eax+1")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("1+1")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("eax+ebx")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("ax")).is_err());
+        assert!(EffectiveAddressOperand::try_from(&NasmStr("al")).is_err());
+
+        let expected = EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("+1")).unwrap());
+        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("+1")).unwrap(), expected);
+
+        let expected = EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("1")).unwrap());
+        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("1")).unwrap(), expected);
+
+        let expected = EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("-1")).unwrap());
+        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("-1")).unwrap(), expected);
+
+        let expected = EffectiveAddressOperand::Immediate(Immediate::try_from(&NasmStr("-1")).unwrap());
+        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("-1")).unwrap(), expected);
+
+        let expected = EffectiveAddressOperand::Register(Register::try_from(&NasmStr("eax")).unwrap());
+        assert_eq!(EffectiveAddressOperand::try_from(&NasmStr("eax")).unwrap(), expected);
     }
 
     #[test]
@@ -1813,6 +1837,24 @@ mod tests {
 
         let to_parse = "0q0200";
         let expected_parsed = 128;
+        let expected_immediate = Immediate {
+            raw: to_parse.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let to_parse = "0b1100_1000";
+        let expected_parsed = 200;
+        let expected_immediate = Immediate {
+            raw: to_parse.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let to_parse = "0b11_100";
+        let expected_parsed = 28;
         let expected_immediate = Immediate {
             raw: to_parse.into(),
             parsed: expected_parsed,
