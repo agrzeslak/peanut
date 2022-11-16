@@ -1191,7 +1191,6 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
         // ..h (where first char is numberic) = hex
         // 0x...              = hex
         // 0h...              = hex
-        // FIXME: currently do not allow underscores e.g. 0b1100_1000
         let parse = |trimmed_value: &str, radix: u32, radix_name: &str| {
             let parsed = i64::from_str_radix(trimmed_value, radix).map_err(|_| {
                 Error::CannotParseInstruction(format!(
@@ -1229,20 +1228,12 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
         if to_parse.len() > 2 {
             let prefix = to_parse[0..=1].to_lowercase();
             let value_without_prefix = &to_parse[2..];
-            if prefix == "0b" {
-                return parse(value_without_prefix, 2, "binary");
-            }
-
-            if prefix == "0q" {
-                return parse(value_without_prefix, 8, "octal");
-            }
-
-            if prefix == "0d" {
-                return parse(value_without_prefix, 10, "decimal");
-            }
-
-            if prefix == "0h" || prefix == "0x" {
-                return parse(value_without_prefix, 16, "hexadecimal");
+            match prefix.as_str() {
+                "0b" => return parse(value_without_prefix, 2, "binary"),
+                "0q" => return parse(value_without_prefix, 8, "octal"),
+                "0d" => return parse(value_without_prefix, 10, "decimal"),
+                "0h" | "0x" => return parse(value_without_prefix, 16, "hexadecimal"),
+                _ => (),
             }
         }
 
