@@ -1710,6 +1710,7 @@ mod tests {
         assert!(Immediate::try_from(&NasmStr("00d200")).is_err());
         assert!(Immediate::try_from(&NasmStr("c0h")).is_err());
         assert!(Immediate::try_from(&NasmStr(" 1 ")).is_err());
+        assert!(Immediate::try_from(&NasmStr("0q200h")).is_err());
 
         let to_parse = "0x200";
         let expected_parsed = 512;
@@ -1731,6 +1732,15 @@ mod tests {
 
         let to_parse = "000200h";
         let expected_parsed = 512;
+        let expected_immediate = Immediate {
+            raw: to_parse.into(),
+            parsed: expected_parsed,
+        };
+        let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
+        assert_eq!(immediate, expected_immediate);
+
+        let to_parse = "0d200h";
+        let expected_parsed = 53760;
         let expected_immediate = Immediate {
             raw: to_parse.into(),
             parsed: expected_parsed,
