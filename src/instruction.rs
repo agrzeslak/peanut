@@ -918,6 +918,8 @@ const INSTRUCTION_DESCRIPTORS: [InstructionDescriptor; 254] = [
 ];
 
 // FIXME: create hashtable or some other faster lookup method and use that.
+// TODO: I don't understand how assemblers choose which opcode to use when multiple would match.
+//       For example ADD r8, rm8 vs ADD rm8, r8. How does ADD al, bl choose which one is correct?
 pub(crate) fn lookup_instructions_by_mnemonic(mnemonic: &str) -> Vec<&InstructionDescriptor> {
     let mnemonic = mnemonic.to_uppercase();
     INSTRUCTION_DESCRIPTORS
@@ -1255,6 +1257,29 @@ pub enum OperandType {
     Register(Register),
 }
 
+impl OperandType {
+    pub fn unwrap_immediate(&self) -> &Immediate {
+        let Self::Immediate(immediate) = self else {
+            panic!("attempted to unwrap a non-immediate variant as an immediate");
+        };
+        immediate
+    }
+
+    pub fn unwrap_effective_address(&self) -> &EffectiveAddress {
+        let Self::Memory(effective_address) = self else {
+            panic!("attempted to unwrap a non-effective address variant as an effective address");
+        };
+        effective_address
+    }
+
+    pub fn unwrap_register(&self) -> &Register {
+        let Self::Register(register) = self else {
+            panic!("attempted to unwrap a non-register variant as an register");
+        };
+        register
+    }
+}
+
 impl TryFrom<&NasmStr<'_>> for OperandType {
     type Error = Error;
 
@@ -1375,6 +1400,35 @@ pub struct Instruction {
     pub mnemonic: String,
     pub operands: Vec<Operand>,
     pub cpu_function: CpuFunction,
+}
+
+impl Instruction {
+    /// Unwrap the operand at the given index as an `Immediate`, otherwise panic.
+    pub fn unwrap_immediate_operand(&self, index: usize) -> &Immediate {
+        self.operands
+            .get(index)
+            .unwrap()
+            .operand_type()
+            .unwrap_immediate()
+    }
+
+    /// Unwrap the operand at the given index as an `EffectiveAddress`, otherwise panic.
+    pub fn unwrap_effective_address_operand(&self, index: usize) -> &EffectiveAddress {
+        self.operands
+            .get(index)
+            .unwrap()
+            .operand_type()
+            .unwrap_effective_address()
+    }
+
+    /// Unwrap the operand at the given index as a `Register`, otherwise panic.
+    pub fn unwrap_register_operand(&self, index: usize) -> &Register {
+        self.operands
+            .get(index)
+            .unwrap()
+            .operand_type()
+            .unwrap_register()
+    }
 }
 
 impl<'a> TryFrom<&NasmStr<'a>> for Instruction {
