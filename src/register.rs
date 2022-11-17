@@ -9,38 +9,38 @@ use crate::{
 };
 
 trait HighLowBytes32 {
-    fn get_high(&self) -> u16;
-    fn set_high(&mut self, value: u16);
-    fn get_low_high(&self) -> u8;
-    fn set_low_high(&mut self, value: u8);
-    fn get_low_low(&self) -> u8;
-    fn set_low_low(&mut self, value: u8);
+    fn get_high_16(&self) -> u16;
+    fn set_high_16(&mut self, value: u16);
+    fn get_high_8(&self) -> u8;
+    fn set_high_8(&mut self, value: u8);
+    fn get_low_8(&self) -> u8;
+    fn set_low_8(&mut self, value: u8);
 }
 
 impl HighLowBytes32 for u32 {
-    fn get_high(&self) -> u16 {
+    fn get_high_16(&self) -> u16 {
         (*self >> 16) as u16
     }
 
-    fn set_high(&mut self, value: u16) {
+    fn set_high_16(&mut self, value: u16) {
         *self &= 0x0000ffff;
         *self |= (value as u32) << 16
     }
 
-    fn get_low_high(&self) -> u8 {
+    fn get_high_8(&self) -> u8 {
         (*self >> 8) as u8
     }
 
-    fn set_low_high(&mut self, value: u8) {
+    fn set_high_8(&mut self, value: u8) {
         *self &= 0xffff00ff;
         *self |= (value as u32) << 8
     }
 
-    fn get_low_low(&self) -> u8 {
+    fn get_low_8(&self) -> u8 {
         *self as u8
     }
 
-    fn set_low_low(&mut self, value: u8) {
+    fn set_low_8(&mut self, value: u8) {
         *self &= 0xffffff00;
         *self |= value as u32;
     }
@@ -231,57 +231,49 @@ impl Eflags {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Register32 {
+pub enum GeneralPurposeRegister {
     Eax,
     Ebx,
     Ecx,
     Edx,
-    Edi,
     Esi,
+    Edi,
     Ebp,
     Esp,
-    Eflags,
-    Eip,
 }
 
-impl Display for Register32 {
+impl Display for GeneralPurposeRegister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Register32::*;
-
+        use GeneralPurposeRegister::*;
         let register = match self {
             Eax => "EAX",
             Ebx => "EBX",
             Ecx => "ECX",
             Edx => "EDX",
-            Edi => "EDI",
             Esi => "ESI",
+            Edi => "EDI",
             Ebp => "EBP",
             Esp => "ESP",
-            Eflags => "EFLAGS",
-            Eip => "EIP",
         };
 
         write!(f, "{register}")
     }
 }
 
-impl TryFrom<&NasmStr<'_>> for Register32 {
+impl TryFrom<&NasmStr<'_>> for GeneralPurposeRegister {
     type Error = Error;
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
-        use Register32::*;
-
+        use GeneralPurposeRegister::*;
         match value.0.to_uppercase().as_str() {
             "EAX" => Ok(Eax),
             "EBX" => Ok(Ebx),
             "ECX" => Ok(Ecx),
             "EDX" => Ok(Edx),
-            "EDI" => Ok(Edi),
             "ESI" => Ok(Esi),
+            "EDI" => Ok(Edi),
             "EBP" => Ok(Ebp),
             "ESP" => Ok(Esp),
-            "EFLAGS" => Ok(Eflags),
-            "EIP" => Ok(Eip),
             _ => Err(Error::CannotParseInstruction(format!(
                 "{} is not a valid 32-bit register",
                 value.0
@@ -298,16 +290,15 @@ pub enum Register16 {
     Dx,
     Cs,
     Ds,
+    Ss,
     Es,
     Fs,
     Gs,
-    Ss,
 }
 
 impl Display for Register16 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Register16::*;
-
         let register = match self {
             Ax => "AX",
             Bx => "BX",
@@ -315,10 +306,10 @@ impl Display for Register16 {
             Dx => "DX",
             Cs => "CS",
             Ds => "DS",
+            Ss => "SS",
             Es => "ES",
             Fs => "FS",
             Gs => "GS",
-            Ss => "SS",
         };
 
         write!(f, "{register}")
@@ -330,7 +321,6 @@ impl TryFrom<&NasmStr<'_>> for Register16 {
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
         use Register16::*;
-
         match value.0.to_uppercase().as_str() {
             "AX" => Ok(Ax),
             "BX" => Ok(Bx),
@@ -338,10 +328,10 @@ impl TryFrom<&NasmStr<'_>> for Register16 {
             "DX" => Ok(Dx),
             "CS" => Ok(Cs),
             "DS" => Ok(Ds),
+            "SS" => Ok(Ss),
             "ES" => Ok(Es),
             "FS" => Ok(Fs),
             "GS" => Ok(Gs),
-            "SS" => Ok(Ss),
             _ => Err(Error::CannotParseInstruction(format!(
                 "{} is not a valid 16-bit register",
                 value.0
@@ -365,7 +355,6 @@ pub enum Register8 {
 impl Display for Register8 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Register8::*;
-
         let register = match self {
             Ah => "AH",
             Al => "AL",
@@ -386,7 +375,6 @@ impl TryFrom<&NasmStr<'_>> for Register8 {
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
         use Register8::*;
-
         match value.0.to_uppercase().as_str() {
             "AH" => Ok(Ah),
             "AL" => Ok(Al),
@@ -431,24 +419,23 @@ pub enum Register {
     Ebp,
     Esp,
 
-    Eflags,
-    Eip,
-
     Cs,
     Ds,
     Es,
     Fs,
     Gs,
     Ss,
+
+    Eflags,
+    Eip,
 }
 
 impl Register {
     pub fn size(&self) -> Size {
         use Register::*;
         use Size::*;
-
         match self {
-            Eax | Ebx | Ecx | Edx | Edi | Esi | Ebp | Esp | Eflags | Eip => Dword,
+            Eax | Ebx | Ecx | Edx |  Esi | Edi | Ebp | Esp | Eflags | Eip => Dword,
             Ax | Bx | Cx | Dx | Cs | Ds | Es | Fs | Gs | Ss => Word,
             Ah | Al | Bh | Bl | Ch | Cl | Dh | Dl => Byte,
         }
@@ -458,7 +445,6 @@ impl Register {
 impl Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Register::*;
-
         let register = match self {
             Eax => "EAX",
             Ax => "AX",
@@ -480,71 +466,72 @@ impl Display for Register {
             Dh => "DH",
             Dl => "DL",
 
-            Edi => "EDI",
             Esi => "ESI",
+            Edi => "EDI",
             Ebp => "EBP",
             Esp => "ESP",
 
-            Eflags => "EFLAGS",
-            Eip => "EIP",
-
             Cs => "CS",
             Ds => "DS",
+            Ss => "SS",
             Es => "ES",
             Fs => "FS",
             Gs => "GS",
-            Ss => "SS",
+
+            Eflags => "EFLAGS",
+            Eip => "EIP",
         };
 
         write!(f, "{register}")
     }
 }
 
-impl From<&Register32> for Register {
-    fn from(register: &Register32) -> Self {
+impl From<&GeneralPurposeRegister> for Register {
+    fn from(register: &GeneralPurposeRegister) -> Self {
+        use GeneralPurposeRegister::*;
         match register {
-            Register32::Eax => Register::Eax,
-            Register32::Ebx => Register::Ebx,
-            Register32::Ecx => Register::Ecx,
-            Register32::Edx => Register::Edx,
-            Register32::Edi => Register::Edi,
-            Register32::Esi => Register::Esi,
-            Register32::Ebp => Register::Ebp,
-            Register32::Esp => Register::Esp,
-            Register32::Eflags => Register::Eflags,
-            Register32::Eip => Register::Eip,
+            Eax => Self::Eax,
+            Ebx => Self::Ebx,
+            Ecx => Self::Ecx,
+            Edx => Self::Edx,
+            Esi => Self::Esi,
+            Edi => Self::Edi,
+            Ebp => Self::Ebp,
+            Esp => Self::Esp,
         }
     }
 }
 
 impl From<&Register16> for Register {
     fn from(register: &Register16) -> Self {
+        use Register16::*;
         match register {
-            Register16::Ax => Register::Ax,
-            Register16::Bx => Register::Bx,
-            Register16::Cx => Register::Cx,
-            Register16::Dx => Register::Dx,
-            Register16::Cs => Register::Cs,
-            Register16::Ds => Register::Ds,
-            Register16::Es => Register::Es,
-            Register16::Fs => Register::Fs,
-            Register16::Gs => Register::Gs,
-            Register16::Ss => Register::Ss,
+            Ax => Self::Ax,
+            Bx => Self::Bx,
+            Cx => Self::Cx,
+            Dx => Self::Dx,
+            Cs => Self::Cs,
+            Ds => Self::Ds,
+            Ss => Self::Ss,
+            Es => Self::Es,
+            Fs => Self::Fs,
+            Gs => Self::Gs,
         }
     }
 }
 
 impl From<&Register8> for Register {
     fn from(register: &Register8) -> Self {
+        use Register8::*;
         match register {
-            Register8::Ah => Register::Ah,
-            Register8::Al => Register::Al,
-            Register8::Bh => Register::Bh,
-            Register8::Bl => Register::Bl,
-            Register8::Ch => Register::Ch,
-            Register8::Cl => Register::Cl,
-            Register8::Dh => Register::Dh,
-            Register8::Dl => Register::Dl,
+            Ah => Self::Ah,
+            Al => Self::Al,
+            Bh => Self::Bh,
+            Bl => Self::Bl,
+            Ch => Self::Ch,
+            Cl => Self::Cl,
+            Dh => Self::Dh,
+            Dl => Self::Dl,
         }
     }
 }
@@ -554,7 +541,6 @@ impl TryFrom<&NasmStr<'_>> for Register {
 
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
         use Register::*;
-
         match value.0.to_uppercase().as_str() {
             "EAX" => Ok(Eax),
             "AX" => Ok(Ax),
@@ -576,20 +562,21 @@ impl TryFrom<&NasmStr<'_>> for Register {
             "DH" => Ok(Dh),
             "DL" => Ok(Dl),
 
-            "EDI" => Ok(Edi),
             "ESI" => Ok(Esi),
+            "EDI" => Ok(Edi),
             "EBP" => Ok(Ebp),
             "ESP" => Ok(Esp),
+
+            "CS" => Ok(Cs),
+            "DS" => Ok(Ds),
+            "SS" => Ok(Ss),
+            "ES" => Ok(Es),
+            "FS" => Ok(Fs),
+            "GS" => Ok(Gs),
 
             "EFLAGS" => Ok(Eflags),
             "EIP" => Ok(Eip),
 
-            "CS" => Ok(Cs),
-            "DS" => Ok(Ds),
-            "ES" => Ok(Es),
-            "FS" => Ok(Fs),
-            "GS" => Ok(Gs),
-            "SS" => Ok(Ss),
             _ => Err(Error::CannotParseInstruction(format!(
                 "{} is not a valid register",
                 value.0
@@ -598,23 +585,22 @@ impl TryFrom<&NasmStr<'_>> for Register {
     }
 }
 
-impl TryFrom<&Register> for Register32 {
+impl TryFrom<&Register> for GeneralPurposeRegister {
     type Error = Error;
 
     fn try_from(register: &Register) -> Result<Self, Self::Error> {
+        use Register::*;
         match register {
-            Register::Eax => Ok(Register32::Eax),
-            Register::Ebx => Ok(Register32::Ebx),
-            Register::Ecx => Ok(Register32::Ecx),
-            Register::Edx => Ok(Register32::Edx),
-            Register::Edi => Ok(Register32::Edi),
-            Register::Esi => Ok(Register32::Esi),
-            Register::Ebp => Ok(Register32::Ebp),
-            Register::Esp => Ok(Register32::Esp),
-            Register::Eflags => Ok(Register32::Eflags),
-            Register::Eip => Ok(Register32::Eip),
+            Eax => Ok(Self::Eax),
+            Ebx => Ok(Self::Ebx),
+            Ecx => Ok(Self::Ecx),
+            Edx => Ok(Self::Edx),
+            Esi => Ok(Self::Esi),
+            Edi => Ok(Self::Edi),
+            Ebp => Ok(Self::Ebp),
+            Esp => Ok(Self::Esp),
             _ => Err(Error::CannotCovertType(format!(
-                "{} is not a 32-bit register",
+                "{} is not a general purpose register",
                 register
             ))),
         }
@@ -625,17 +611,18 @@ impl TryFrom<&Register> for Register16 {
     type Error = Error;
 
     fn try_from(register: &Register) -> Result<Self, Self::Error> {
+        use Register::*;
         match register {
-            Register::Ax => Ok(Register16::Ax),
-            Register::Bx => Ok(Register16::Bx),
-            Register::Cx => Ok(Register16::Cx),
-            Register::Dx => Ok(Register16::Dx),
-            Register::Cs => Ok(Register16::Cs),
-            Register::Ds => Ok(Register16::Ds),
-            Register::Es => Ok(Register16::Es),
-            Register::Fs => Ok(Register16::Fs),
-            Register::Gs => Ok(Register16::Gs),
-            Register::Ss => Ok(Register16::Ss),
+            Ax => Ok(Self::Ax),
+            Bx => Ok(Self::Bx),
+            Cx => Ok(Self::Cx),
+            Dx => Ok(Self::Dx),
+            Cs => Ok(Self::Cs),
+            Ds => Ok(Self::Ds),
+            Ss => Ok(Self::Ss),
+            Es => Ok(Self::Es),
+            Fs => Ok(Self::Fs),
+            Gs => Ok(Self::Gs),
             _ => Err(Error::CannotCovertType(format!(
                 "{} is not a 16-bit register",
                 register
@@ -648,15 +635,16 @@ impl TryFrom<&Register> for Register8 {
     type Error = Error;
 
     fn try_from(register: &Register) -> Result<Self, Self::Error> {
+        use Register::*;
         match register {
-            Register::Ah => Ok(Register8::Ah),
-            Register::Al => Ok(Register8::Al),
-            Register::Bh => Ok(Register8::Bh),
-            Register::Bl => Ok(Register8::Bl),
-            Register::Ch => Ok(Register8::Ch),
-            Register::Cl => Ok(Register8::Cl),
-            Register::Dh => Ok(Register8::Dh),
-            Register::Dl => Ok(Register8::Dl),
+            Ah => Ok(Self::Ah),
+            Al => Ok(Self::Al),
+            Bh => Ok(Self::Bh),
+            Bl => Ok(Self::Bl),
+            Ch => Ok(Self::Ch),
+            Cl => Ok(Self::Cl),
+            Dh => Ok(Self::Dh),
+            Dl => Ok(Self::Dl),
             _ => Err(Error::CannotCovertType(format!(
                 "{} is not a 8-bit register",
                 register
@@ -671,18 +659,18 @@ pub struct Registers {
     ebx: u32,
     ecx: u32,
     edx: u32,
-    edi: u32,
     esi: u32,
+    edi: u32,
     ebp: u32,
     esp: u32,
-    eflags: Eflags,
-    eip: u32,
     cs: u16,
     ds: u16,
     es: u16,
     fs: u16,
     gs: u16,
     ss: u16,
+    eflags: Eflags,
+    eip: u32,
 }
 
 macro_rules! create_general_register_accessors {
@@ -697,27 +685,27 @@ macro_rules! create_general_register_accessors {
             }
 
             pub fn [<get_ $register_letter x>](&self) -> u16 {
-                self.[<e $register_letter x>].get_high()
+                self.[<e $register_letter x>].get_high_16()
             }
 
             pub fn [<set_ $register_letter x>](&mut self, value: u16) {
-                self.[<e $register_letter x>].set_high(value)
+                self.[<e $register_letter x>].set_high_16(value)
             }
 
             pub fn [<get_ $register_letter h>](&self) -> u8 {
-                self.[<e $register_letter x>].get_low_high()
+                self.[<e $register_letter x>].get_low_8()
             }
 
             pub fn [<set_ $register_letter h>](&mut self, value: u8) {
-                self.[<e $register_letter x>].set_low_high(value);
+                self.[<e $register_letter x>].set_low_8(value);
             }
 
             pub fn [<get_ $register_letter l>](&self) -> u8 {
-                self.[<e $register_letter x>].get_low_low()
+                self.[<e $register_letter x>].get_low_8()
             }
 
             pub fn [<set_ $register_letter l>](&mut self, value: u8) {
-                self.[<e $register_letter x>].set_low_low(value);
+                self.[<e $register_letter x>].set_low_8(value);
             }
         }
     };
@@ -728,9 +716,8 @@ impl Registers {
     create_general_register_accessors!(c);
     create_general_register_accessors!(d);
 
-    pub fn get32(&self, register: &Register32) -> u32 {
-        use Register32::*;
-
+    pub fn get32(&self, register: &GeneralPurposeRegister) -> u32 {
+        use GeneralPurposeRegister::*;
         match register {
             Eax => self.get_eax(),
             Ebx => self.get_ebx(),
@@ -740,15 +727,11 @@ impl Registers {
             Esi => self.esi,
             Ebp => self.ebp,
             Esp => self.esp,
-            // FIXME: likely a better way to structure this. Perhaps eflags -> u32.
-            Eflags => unimplemented!(),
-            Eip => self.eip,
         }
     }
 
-    pub fn set32(&mut self, register: &Register32, value: u32) {
-        use Register32::*;
-
+    pub fn set32(&mut self, register: &GeneralPurposeRegister, value: u32) {
+        use GeneralPurposeRegister::*;
         match register {
             Eax => self.set_eax(value),
             Ebx => self.set_ebx(value),
@@ -758,15 +741,11 @@ impl Registers {
             Esi => self.esi = value,
             Ebp => self.ebp = value,
             Esp => self.esp = value,
-            // FIXME: likely a better way to structure this. Perhaps eflags -> u32.
-            Eflags => unimplemented!(),
-            Eip => self.eip = value,
         }
     }
 
     pub fn get16(&self, register: &Register16) -> u16 {
         use Register16::*;
-
         match register {
             Ax => self.get_ax(),
             Bx => self.get_bx(),
@@ -783,7 +762,6 @@ impl Registers {
 
     pub fn set16(&mut self, register: &Register16, value: u16) {
         use Register16::*;
-
         match register {
             Ax => self.set_ax(value),
             Bx => self.set_bx(value),
@@ -800,7 +778,6 @@ impl Registers {
 
     pub fn get8(&self, register: &Register8) -> u8 {
         use Register8::*;
-
         match register {
             Ah => self.get_ah(),
             Al => self.get_al(),
@@ -815,7 +792,6 @@ impl Registers {
 
     pub fn set8(&mut self, register: &Register8, value: u8) {
         use Register8::*;
-
         match register {
             Ah => self.set_ah(value),
             Al => self.set_al(value),
