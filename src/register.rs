@@ -271,17 +271,17 @@ impl TryFrom<&NasmStr<'_>> for Register32 {
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
         use Register32::*;
 
-        match value.0.to_lowercase().as_str() {
-            "eax" => Ok(Eax),
-            "ebx" => Ok(Ebx),
-            "ecx" => Ok(Ecx),
-            "edx" => Ok(Edx),
-            "edi" => Ok(Edi),
-            "esi" => Ok(Esi),
-            "ebp" => Ok(Ebp),
-            "esp" => Ok(Esp),
-            "eflags" => Ok(Eflags),
-            "eip" => Ok(Eip),
+        match value.0.to_uppercase().as_str() {
+            "EAX" => Ok(Eax),
+            "EBX" => Ok(Ebx),
+            "ECX" => Ok(Ecx),
+            "EDX" => Ok(Edx),
+            "EDI" => Ok(Edi),
+            "ESI" => Ok(Esi),
+            "EBP" => Ok(Ebp),
+            "ESP" => Ok(Esp),
+            "EFLAGS" => Ok(Eflags),
+            "EIP" => Ok(Eip),
             _ => Err(Error::CannotParseInstruction(format!(
                 "{} is not a valid 32-bit register",
                 value.0
@@ -331,17 +331,17 @@ impl TryFrom<&NasmStr<'_>> for Register16 {
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
         use Register16::*;
 
-        match value.0.to_lowercase().as_str() {
-            "ax" => Ok(Ax),
-            "bx" => Ok(Bx),
-            "cx" => Ok(Cx),
-            "dx" => Ok(Dx),
-            "cs" => Ok(Cs),
-            "ds" => Ok(Ds),
-            "es" => Ok(Es),
-            "fs" => Ok(Fs),
-            "gs" => Ok(Gs),
-            "ss" => Ok(Ss),
+        match value.0.to_uppercase().as_str() {
+            "AX" => Ok(Ax),
+            "BX" => Ok(Bx),
+            "CX" => Ok(Cx),
+            "DX" => Ok(Dx),
+            "CS" => Ok(Cs),
+            "DS" => Ok(Ds),
+            "ES" => Ok(Es),
+            "FS" => Ok(Fs),
+            "GS" => Ok(Gs),
+            "SS" => Ok(Ss),
             _ => Err(Error::CannotParseInstruction(format!(
                 "{} is not a valid 16-bit register",
                 value.0
@@ -387,15 +387,15 @@ impl TryFrom<&NasmStr<'_>> for Register8 {
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
         use Register8::*;
 
-        match value.0.to_lowercase().as_str() {
-            "ah" => Ok(Ah),
-            "al" => Ok(Al),
-            "bh" => Ok(Bh),
-            "bl" => Ok(Bl),
-            "ch" => Ok(Ch),
-            "cl" => Ok(Cl),
-            "dh" => Ok(Dh),
-            "dl" => Ok(Dl),
+        match value.0.to_uppercase().as_str() {
+            "AH" => Ok(Ah),
+            "AL" => Ok(Al),
+            "BH" => Ok(Bh),
+            "BL" => Ok(Bl),
+            "CH" => Ok(Ch),
+            "CL" => Ok(Cl),
+            "DH" => Ok(Dh),
+            "DL" => Ok(Dl),
             _ => Err(Error::CannotParseInstruction(format!(
                 "{} is not a valid 8-bit register",
                 value.0
@@ -555,41 +555,41 @@ impl TryFrom<&NasmStr<'_>> for Register {
     fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
         use Register::*;
 
-        match value.0.to_lowercase().as_str() {
-            "eax" => Ok(Eax),
-            "ax" => Ok(Ax),
-            "ah" => Ok(Ah),
-            "al" => Ok(Al),
+        match value.0.to_uppercase().as_str() {
+            "EAX" => Ok(Eax),
+            "AX" => Ok(Ax),
+            "AH" => Ok(Ah),
+            "AL" => Ok(Al),
 
-            "ebx" => Ok(Ebx),
-            "bx" => Ok(Bx),
-            "bh" => Ok(Bh),
-            "bl" => Ok(Bl),
+            "EBX" => Ok(Ebx),
+            "BX" => Ok(Bx),
+            "BH" => Ok(Bh),
+            "BL" => Ok(Bl),
 
-            "ecx" => Ok(Ecx),
-            "cx" => Ok(Cx),
-            "ch" => Ok(Ch),
-            "cl" => Ok(Cl),
+            "ECX" => Ok(Ecx),
+            "CX" => Ok(Cx),
+            "CH" => Ok(Ch),
+            "CL" => Ok(Cl),
 
-            "edx" => Ok(Edx),
-            "dx" => Ok(Dx),
-            "dh" => Ok(Dh),
-            "dl" => Ok(Dl),
+            "EDX" => Ok(Edx),
+            "DX" => Ok(Dx),
+            "DH" => Ok(Dh),
+            "DL" => Ok(Dl),
 
-            "edi" => Ok(Edi),
-            "esi" => Ok(Esi),
-            "ebp" => Ok(Ebp),
-            "esp" => Ok(Esp),
+            "EDI" => Ok(Edi),
+            "ESI" => Ok(Esi),
+            "EBP" => Ok(Ebp),
+            "ESP" => Ok(Esp),
 
-            "eflags" => Ok(Eflags),
-            "eip" => Ok(Eip),
+            "EFLAGS" => Ok(Eflags),
+            "EIP" => Ok(Eip),
 
-            "cs" => Ok(Cs),
-            "ds" => Ok(Ds),
-            "es" => Ok(Es),
-            "fs" => Ok(Fs),
-            "gs" => Ok(Gs),
-            "ss" => Ok(Ss),
+            "CS" => Ok(Cs),
+            "DS" => Ok(Ds),
+            "ES" => Ok(Es),
+            "FS" => Ok(Fs),
+            "GS" => Ok(Gs),
+            "SS" => Ok(Ss),
             _ => Err(Error::CannotParseInstruction(format!(
                 "{} is not a valid register",
                 value.0
@@ -613,8 +613,11 @@ impl TryFrom<&Register> for Register32 {
             Register::Esp => Ok(Register32::Esp),
             Register::Eflags => Ok(Register32::Eflags),
             Register::Eip => Ok(Register32::Eip),
-            _ => Err(Error::CannotCovertType(format!("{} is not a 32-bit register", register)))
-        } 
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a 32-bit register",
+                register
+            ))),
+        }
     }
 }
 
@@ -633,7 +636,10 @@ impl TryFrom<&Register> for Register16 {
             Register::Fs => Ok(Register16::Fs),
             Register::Gs => Ok(Register16::Gs),
             Register::Ss => Ok(Register16::Ss),
-            _ => Err(Error::CannotCovertType(format!("{} is not a 16-bit register", register)))
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a 16-bit register",
+                register
+            ))),
         }
     }
 }
@@ -651,7 +657,10 @@ impl TryFrom<&Register> for Register8 {
             Register::Cl => Ok(Register8::Cl),
             Register::Dh => Ok(Register8::Dh),
             Register::Dl => Ok(Register8::Dl),
-            _ => Err(Error::CannotCovertType(format!("{} is not a 8-bit register", register)))
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a 8-bit register",
+                register
+            ))),
         }
     }
 }

@@ -88,4 +88,3 @@ impl Cpu {
     pub(crate) fn sub_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
     pub(crate) fn sub_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
 }
-
