@@ -693,11 +693,11 @@ macro_rules! create_general_register_accessors {
             }
 
             pub fn [<get_ $register_letter h>](&self) -> u8 {
-                self.[<e $register_letter x>].get_low_8()
+                self.[<e $register_letter x>].get_high_8()
             }
 
             pub fn [<set_ $register_letter h>](&mut self, value: u8) {
-                self.[<e $register_letter x>].set_low_8(value);
+                self.[<e $register_letter x>].set_high_8(value);
             }
 
             pub fn [<get_ $register_letter l>](&self) -> u8 {
@@ -810,7 +810,7 @@ mod tests {
     use super::*;
 
     /// Tests the getters and setters of a general register. `$register_letter` is expanded to form
-    /// `e $register_letter x`, e.g. eax.
+    /// `e $register_letter x`, i.e. `eax`.
     macro_rules! test_general_register_accessors {
         ($register_letter:ident) => {
             paste! {
