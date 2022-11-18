@@ -53,96 +53,128 @@ pub enum CurrentPrivilegeLevel {
     CPL3,
 }
 
-/// Bit #   Mask    Abbreviation    Description     Category    =1              =0
-/// 0       0x0001  CF              Carry Flag      Status      CY (Carry)      NC (No Carry)
-/// 1       0x0002  Reserved, always 1 in EFLAGS.
-/// 2       0x0004  PF              Parity Flag     Status      PE (Parity Even)
-#[derive(Default)]
+
+/// Section 3.4.3 EFLAGS Register.
+/// - Status flags indicate the result of arithmetic instructions.
+/// - System flags and the IOPL field control OS or executive operations. Application programs
+///   should not modify them.
+/// - Reserved bits and values: 1=1, 3=0, 5=0, 15=0, 22-31=0.
+///
+/// CF (Carry Flag), bit 0, status flag.
+/// Set if an arithmetic operation generates a carry or a borrow out of the most-significant
+/// bit of the result; cleared otherwise. This flag indicates an overflow condition for
+/// unsigned-integer arithmetic. It is also used in multiple-precision arithmetic.
+///
+/// PF (Parity Flag), bit 2, status flag.
+/// Set if the least-significant byte of the result contains an even number of 1 bits; cleared
+/// otherwise.
+///
+/// AF (Auxiliary Carry Flag), bit 4, status flag.
+/// Set if an arithmetic operation generates a carry or a borrow out of bit 3 of the result;
+/// cleared otherwise. This flag is used in binary-coded decimal (BCD) arithmetic.
+///
+/// ZF (Zero Flag), bit 6, status flag.
+/// Set if the result is zero; cleared otherwise.
+///
+/// SF (Sign Flag), bit 7, status flag.
+/// Set equal to the most-significant bit of the result, which is the sign bit of a signed
+/// integer. (0 indicates a positive value and 1 indicates a negative value.)
+///
+/// TF (Trap Flag), bit 8, system flag.
+/// Set to enable single-step mode for debugging; clear to disable single-step mode.
+///
+/// IF (Interrupt Enable Flag), bit 9, system flag.
+/// Controls the response of the processor to maskable interrupt requests. Set to respond to
+/// maskable interrupts; cleared to inhibit maskable interrupts.
+///
+/// DF (Direction Flag), bit 10, control flag.
+/// Controls string instructions (MOVS, CMPS, SCAS, LODS, and STOS). Setting the DF flag causes
+/// the string instructions to auto-decrement (to process strings from high addresses to low
+/// addresses). Clearing the DF flag causes the string instructions to auto-increment (process
+/// strings from low addresses to high addresses). The STD and CLD instructions set and clear
+/// the DF flag, respectively.
+///
+/// OF (Overflow Flag), bit 11, status flag.
+/// Set if the integer result is too large a positive number or too small a negative number
+/// (excluding the sign-bit) to fit in the destination operand; cleared otherwise. This flag
+/// indicates an overflow condition for signed-integer (two’s complement) arithmetic.
+///
+/// IOPL (I/O Privilege Level Field), bits 12 and 13, system flag.
+/// Indicates the I/O privilege level of the currently running program or task. The current
+/// privilege level (CPL) of the currently running program or task must be less than or equal
+/// to the I/O privilege level to access the I/O address space. The POPF and IRET instructions
+/// can modify this field only when operating at a CPL of 0.
+///
+/// NT (Nested Task Flag), bit 14, system flag.
+/// Controls the chaining of interrupted and called tasks. Set when the current task is linked
+/// to the previously executed task; cleared when the current task is not linked to another
+/// task.
+///
+/// RF (Resume Flag), bit 16, system flag.
+/// Controls the processor’s response to debug exceptions.
+///
+/// VM (Virtual-8086 Mode Flag), bit 17, system flag.
+/// Set to enable virtual-8086 mode; clear to return to protected mode without virtual-8086
+/// mode semantics.
+///
+/// AC (Alignment Check (or Access Control) Flag), bit 18, system flag.
+/// If the AM bit is set in the CR0 register, alignment checking of user-mode data accesses is
+/// enabled if and only if this flag is 1. If the SMAP bit is set in the CR4 register, explicit
+/// supervisor-mode data accesses to user-mode pages are allowed if and only if this bit is 1.
+/// See Section 4.6, “Access Rights,” in the Intel® 64 and IA-32 Architectures Software
+/// Developer’s Manual, Volume 3A.
+///
+/// VIF (Virtual Interrupt Flag), bit 19, system flag.
+/// Virtual image of the IF flag. Used in conjunction with the VIP flag. (To use this flag and
+/// the VIP flag the virtual mode extensions are enabled by setting the VME flag in control
+/// register CR4).
+///
+/// VIP (Virtual Interrupt Pending Flag), bit 20, system flag.
+/// Set to indicate that an interrupt is pending; clear when no interrupt is pending. (Software
+/// sets and clears this flag; the processor only reads it.) Used in conjunction with the VIF
+/// flag.
+///
+/// ID (Identification Flag), bit 21, system flag.
+/// The ability of a program to set or clear this flag indicates support for the CPUID
+/// instruction.
 pub struct Eflags(Bitmap<32>);
 
+macro_rules! eflags_accessor {
+    ($field_name:ident, $bit:literal) => {
+        paste! {
+            pub fn [<get_ $field_name>](&self) -> bool {
+                self.0.get($bit)
+            }
+
+            pub fn [<set_ $field_name>](&mut self) {
+                self.0.set($bit, true);
+            }
+
+            pub fn [<clear_ $field_name>](&mut self) {
+                self.0.set($bit, false);
+            }
+        }
+    };
+}
+
 impl Eflags {
-    // FIXME: Make this a macro.
-    pub fn get_cf(&self) -> bool {
-        self.0.get(0)
-    }
-    pub fn set_cf(&mut self) {
-        self.0.set(0, true);
-    }
-    pub fn clear_cf(&mut self) {
-        self.0.set(0, false);
-    }
-    pub fn get_pf(&self) -> bool {
-        self.0.get(2)
-    }
-    pub fn set_pf(&mut self) {
-        self.0.set(2, true);
-    }
-    pub fn clear_pf(&mut self) {
-        self.0.set(2, false);
-    }
-    pub fn get_af(&self) -> bool {
-        self.0.get(4)
-    }
-    pub fn set_af(&mut self) {
-        self.0.set(4, true);
-    }
-    pub fn clear_af(&mut self) {
-        self.0.set(4, false);
-    }
-    pub fn get_zf(&self) -> bool {
-        self.0.get(6)
-    }
-    pub fn set_zf(&mut self) {
-        self.0.set(6, true);
-    }
-    pub fn clear_zf(&mut self) {
-        self.0.set(6, false);
-    }
-    pub fn get_sf(&self) -> bool {
-        self.0.get(7)
-    }
-    pub fn set_sf(&mut self) {
-        self.0.set(7, true);
-    }
-    pub fn clear_sf(&mut self) {
-        self.0.set(7, false);
-    }
-    pub fn get_tf(&self) -> bool {
-        self.0.get(8)
-    }
-    pub fn set_tf(&mut self) {
-        self.0.set(8, true);
-    }
-    pub fn clear_tf(&mut self) {
-        self.0.set(8, false);
-    }
-    pub fn get_if(&self) -> bool {
-        self.0.get(9)
-    }
-    pub fn set_if(&mut self) {
-        self.0.set(9, true);
-    }
-    pub fn clear_if(&mut self) {
-        self.0.set(9, false);
-    }
-    pub fn get_df(&self) -> bool {
-        self.0.get(10)
-    }
-    pub fn set_df(&mut self) {
-        self.0.set(10, true);
-    }
-    pub fn clear_df(&mut self) {
-        self.0.set(10, false);
-    }
-    pub fn get_of(&self) -> bool {
-        self.0.get(11)
-    }
-    pub fn set_of(&mut self) {
-        self.0.set(11, true);
-    }
-    pub fn clear_of(&mut self) {
-        self.0.set(11, false);
-    }
+    eflags_accessor!(carry_flag, 0);
+    eflags_accessor!(parity_flag, 2);
+    eflags_accessor!(auxiliary_carry_flag, 4);
+    eflags_accessor!(zero_flag, 6);
+    eflags_accessor!(sign_flag, 7);
+    eflags_accessor!(trap_flag, 8);
+    eflags_accessor!(interrupt_enable_flag, 9);
+    eflags_accessor!(direction_flag, 10);
+    eflags_accessor!(overflow_flag, 11);
+    eflags_accessor!(nested_task, 14);
+    eflags_accessor!(resume_flag, 16);
+    eflags_accessor!(virtual_8086_mode, 17);
+    eflags_accessor!(alignment_check, 18);
+    eflags_accessor!(virtual_interrupt_flag, 19);
+    eflags_accessor!(virtual_interrupt_pending_flag, 20);
+    eflags_accessor!(identification_flag, 21);
+
     pub fn get_iopl(&self) -> CurrentPrivilegeLevel {
         let first_bit = self.0.get(12);
         let second_bit = self.0.get(13);
@@ -154,6 +186,7 @@ impl Eflags {
             (true, true) => CurrentPrivilegeLevel::CPL3,
         }
     }
+
     pub fn set_iopl(&mut self, cpl: CurrentPrivilegeLevel) {
         // FIXME: Verify that these bits correspond to the correct privilege levels.
         let (second_bit, first_bit) = match cpl {
@@ -165,68 +198,14 @@ impl Eflags {
         self.0.set(12, first_bit);
         self.0.set(13, second_bit);
     }
-    pub fn get_nt(&self) -> bool {
-        self.0.get(14)
-    }
-    pub fn set_nt(&mut self) {
-        self.0.set(14, true);
-    }
-    pub fn clear_nt(&mut self) {
-        self.0.set(14, false);
-    }
-    pub fn get_rf(&self) -> bool {
-        self.0.get(16)
-    }
-    pub fn set_rf(&mut self) {
-        self.0.set(16, true);
-    }
-    pub fn clear_rf(&mut self) {
-        self.0.set(16, false);
-    }
-    pub fn get_vm(&self) -> bool {
-        self.0.get(17)
-    }
-    pub fn set_vm(&mut self) {
-        self.0.set(17, true);
-    }
-    pub fn clear_vm(&mut self) {
-        self.0.set(17, false);
-    }
-    pub fn get_ac(&self) -> bool {
-        self.0.get(18)
-    }
-    pub fn set_ac(&mut self) {
-        self.0.set(18, true);
-    }
-    pub fn clear_ac(&mut self) {
-        self.0.set(18, false);
-    }
-    pub fn get_vif(&self) -> bool {
-        self.0.get(19)
-    }
-    pub fn set_vif(&mut self) {
-        self.0.set(19, true);
-    }
-    pub fn clear_vif(&mut self) {
-        self.0.set(19, false);
-    }
-    pub fn get_vip(&self) -> bool {
-        self.0.get(20)
-    }
-    pub fn set_vip(&mut self) {
-        self.0.set(20, true);
-    }
-    pub fn clear_vip(&mut self) {
-        self.0.set(20, false);
-    }
-    pub fn get_id(&self) -> bool {
-        self.0.get(21)
-    }
-    pub fn set_id(&mut self) {
-        self.0.set(21, true);
-    }
-    pub fn clear_id(&mut self) {
-        self.0.set(21, false);
+}
+
+impl Default for Eflags {
+    fn default() -> Self {
+        let mut bitmap = Bitmap::new();
+        // Bit 1 is the only reserved bit whose value is 1.
+        bitmap.set(1, true);
+        Self(bitmap)
     }
 }
 
@@ -435,7 +414,7 @@ impl Register {
         use Register::*;
         use Size::*;
         match self {
-            Eax | Ebx | Ecx | Edx |  Esi | Edi | Ebp | Esp | Eflags | Eip => Dword,
+            Eax | Ebx | Ecx | Edx | Esi | Edi | Ebp | Esp | Eflags | Eip => Dword,
             Ax | Bx | Cx | Dx | Cs | Ds | Es | Fs | Gs | Ss => Word,
             Ah | Al | Bh | Bl | Ch | Cl | Dh | Dl => Byte,
         }
@@ -670,6 +649,11 @@ pub struct Registers {
     gs: u16,
     ss: u16,
     eflags: Eflags,
+
+    /// Section 3.5 Instruction Pointer.
+    /// Contains offset in current code segment for next instruction to be executed. Cannot be
+    /// accessed directly by software. IA-32 processors prefetch instrucitons, meaning that the
+    /// address read from the bus during an instruction load does not match the EIP register.
     eip: u32,
 }
 
