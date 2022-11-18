@@ -876,7 +876,7 @@ mod tests {
 
     /// Tests the getters and setters of a general register. `$register_letter` is expanded to form
     /// `e $register_letter x`, i.e. `eax`.
-    macro_rules! test_abcd_register {
+    macro_rules! test_abcd_register_accessors {
         ($register_letter:ident) => {
             paste! {
                 let mut registers = Registers::default();
@@ -897,21 +897,21 @@ mod tests {
 
     #[test]
     fn eax_get_and_set() {
-        test_abcd_register!(a);
+        test_abcd_register_accessors!(a);
     }
 
     #[test]
     fn ebx_get_and_set() {
-        test_abcd_register!(b);
+        test_abcd_register_accessors!(b);
     }
 
     #[test]
     fn ecx_get_and_set() {
-        test_abcd_register!(c);
+        test_abcd_register_accessors!(c);
     }
 
     #[test]
     fn edx_get_and_set() {
-        test_abcd_register!(d);
+        test_abcd_register_accessors!(d);
     }
 }
