@@ -9,8 +9,8 @@ use crate::{
 };
 
 trait HighLowBytes32 {
-    fn get_high_16(&self) -> u16;
-    fn set_high_16(&mut self, value: u16);
+    fn get_low_16(&self) -> u16;
+    fn set_low_16(&mut self, value: u16);
     fn get_high_8(&self) -> u8;
     fn set_high_8(&mut self, value: u8);
     fn get_low_8(&self) -> u8;
@@ -18,13 +18,13 @@ trait HighLowBytes32 {
 }
 
 impl HighLowBytes32 for u32 {
-    fn get_high_16(&self) -> u16 {
-        (*self >> 16) as u16
+    fn get_low_16(&self) -> u16 {
+        *self as u16
     }
 
-    fn set_high_16(&mut self, value: u16) {
-        *self &= 0x0000ffff;
-        *self |= (value as u32) << 16
+    fn set_low_16(&mut self, value: u16) {
+        *self &= 0xffff0000;
+        *self |= value as u32
     }
 
     fn get_high_8(&self) -> u8 {
@@ -53,8 +53,7 @@ pub enum CurrentPrivilegeLevel {
     CPL3,
 }
 
-
-/// Section 3.4.3 EFLAGS Register.
+/// Intel manual section 3.4.3 "EFLAGS Register".
 /// - Status flags indicate the result of arithmetic instructions.
 /// - System flags and the IOPL field control OS or executive operations. Application programs
 ///   should not modify them.
@@ -139,7 +138,7 @@ pub enum CurrentPrivilegeLevel {
 /// instruction.
 pub struct Eflags(Bitmap<32>);
 
-macro_rules! eflags_accessor {
+macro_rules! eflags_accessors {
     ($field_name:ident, $bit:literal) => {
         paste! {
             pub fn [<get_ $field_name>](&self) -> bool {
@@ -158,27 +157,27 @@ macro_rules! eflags_accessor {
 }
 
 impl Eflags {
-    eflags_accessor!(carry_flag, 0);
-    eflags_accessor!(parity_flag, 2);
-    eflags_accessor!(auxiliary_carry_flag, 4);
-    eflags_accessor!(zero_flag, 6);
-    eflags_accessor!(sign_flag, 7);
-    eflags_accessor!(trap_flag, 8);
-    eflags_accessor!(interrupt_enable_flag, 9);
-    eflags_accessor!(direction_flag, 10);
-    eflags_accessor!(overflow_flag, 11);
-    eflags_accessor!(nested_task, 14);
-    eflags_accessor!(resume_flag, 16);
-    eflags_accessor!(virtual_8086_mode, 17);
-    eflags_accessor!(alignment_check, 18);
-    eflags_accessor!(virtual_interrupt_flag, 19);
-    eflags_accessor!(virtual_interrupt_pending_flag, 20);
-    eflags_accessor!(identification_flag, 21);
+    eflags_accessors!(carry_flag, 0);
+    eflags_accessors!(parity_flag, 2);
+    eflags_accessors!(auxiliary_carry_flag, 4);
+    eflags_accessors!(zero_flag, 6);
+    eflags_accessors!(sign_flag, 7);
+    eflags_accessors!(trap_flag, 8);
+    eflags_accessors!(interrupt_enable_flag, 9);
+    eflags_accessors!(direction_flag, 10);
+    eflags_accessors!(overflow_flag, 11);
+    eflags_accessors!(nested_task, 14);
+    eflags_accessors!(resume_flag, 16);
+    eflags_accessors!(virtual_8086_mode, 17);
+    eflags_accessors!(alignment_check, 18);
+    eflags_accessors!(virtual_interrupt_flag, 19);
+    eflags_accessors!(virtual_interrupt_pending_flag, 20);
+    eflags_accessors!(identification_flag, 21);
 
     pub fn get_iopl(&self) -> CurrentPrivilegeLevel {
         let first_bit = self.0.get(12);
         let second_bit = self.0.get(13);
-        // FIXME: Verify that these bits correspond to the correct privilege levels.
+        // TODO: Verify that these bits correspond to the correct privilege levels.
         match (second_bit, first_bit) {
             (false, false) => CurrentPrivilegeLevel::CPL0,
             (false, true) => CurrentPrivilegeLevel::CPL1,
@@ -188,7 +187,7 @@ impl Eflags {
     }
 
     pub fn set_iopl(&mut self, cpl: CurrentPrivilegeLevel) {
-        // FIXME: Verify that these bits correspond to the correct privilege levels.
+        // TODO: Verify that these bits correspond to the correct privilege levels.
         let (second_bit, first_bit) = match cpl {
             CurrentPrivilegeLevel::CPL0 => (false, false),
             CurrentPrivilegeLevel::CPL1 => (false, true),
@@ -267,6 +266,10 @@ pub enum Register16 {
     Bx,
     Cx,
     Dx,
+    Si,
+    Di,
+    Bp,
+    Sp,
     Cs,
     Ds,
     Ss,
@@ -283,6 +286,10 @@ impl Display for Register16 {
             Bx => "BX",
             Cx => "CX",
             Dx => "DX",
+            Si => "SI",
+            Di => "DI",
+            Bp => "BP",
+            Sp => "SP",
             Cs => "CS",
             Ds => "DS",
             Ss => "SS",
@@ -305,6 +312,10 @@ impl TryFrom<&NasmStr<'_>> for Register16 {
             "BX" => Ok(Bx),
             "CX" => Ok(Cx),
             "DX" => Ok(Dx),
+            "SI" => Ok(Si),
+            "DI" => Ok(Di),
+            "BP" => Ok(Bp),
+            "SP" => Ok(Sp),
             "CS" => Ok(Cs),
             "DS" => Ok(Ds),
             "SS" => Ok(Ss),
@@ -393,10 +404,17 @@ pub enum Register {
     Dh,
     Dl,
 
-    Edi,
     Esi,
+    Si,
+
+    Edi,
+    Di,
+
     Ebp,
+    Bp,
+
     Esp,
+    Sp,
 
     Cs,
     Ds,
@@ -415,7 +433,7 @@ impl Register {
         use Size::*;
         match self {
             Eax | Ebx | Ecx | Edx | Esi | Edi | Ebp | Esp | Eflags | Eip => Dword,
-            Ax | Bx | Cx | Dx | Cs | Ds | Es | Fs | Gs | Ss => Word,
+            Ax | Bx | Cx | Dx | Si | Di | Bp | Sp | Cs | Ds | Es | Fs | Gs | Ss => Word,
             Ah | Al | Bh | Bl | Ch | Cl | Dh | Dl => Byte,
         }
     }
@@ -446,9 +464,16 @@ impl Display for Register {
             Dl => "DL",
 
             Esi => "ESI",
+            Si => "SI",
+
             Edi => "EDI",
+            Di => "DI",
+
             Ebp => "EBP",
+            Bp => "BP",
+
             Esp => "ESP",
+            Sp => "SP",
 
             Cs => "CS",
             Ds => "DS",
@@ -489,6 +514,10 @@ impl From<&Register16> for Register {
             Bx => Self::Bx,
             Cx => Self::Cx,
             Dx => Self::Dx,
+            Si => Self::Si,
+            Di => Self::Di,
+            Bp => Self::Bp,
+            Sp => Self::Sp,
             Cs => Self::Cs,
             Ds => Self::Ds,
             Ss => Self::Ss,
@@ -542,9 +571,16 @@ impl TryFrom<&NasmStr<'_>> for Register {
             "DL" => Ok(Dl),
 
             "ESI" => Ok(Esi),
+            "SI" => Ok(Si),
+
             "EDI" => Ok(Edi),
+            "DI" => Ok(Di),
+
             "EBP" => Ok(Ebp),
+            "BP" => Ok(Bp),
+
             "ESP" => Ok(Esp),
+            "SP" => Ok(Sp),
 
             "CS" => Ok(Cs),
             "DS" => Ok(Ds),
@@ -596,6 +632,10 @@ impl TryFrom<&Register> for Register16 {
             Bx => Ok(Self::Bx),
             Cx => Ok(Self::Cx),
             Dx => Ok(Self::Dx),
+            Si => Ok(Self::Si),
+            Di => Ok(Self::Di),
+            Bp => Ok(Self::Bp),
+            Sp => Ok(Self::Sp),
             Cs => Ok(Self::Cs),
             Ds => Ok(Self::Ds),
             Ss => Ok(Self::Ss),
@@ -650,14 +690,14 @@ pub struct Registers {
     ss: u16,
     eflags: Eflags,
 
-    /// Section 3.5 Instruction Pointer.
+    /// Intel manual section 3.5 "INSTRUCTION POINTER".
     /// Contains offset in current code segment for next instruction to be executed. Cannot be
     /// accessed directly by software. IA-32 processors prefetch instrucitons, meaning that the
     /// address read from the bus during an instruction load does not match the EIP register.
     eip: u32,
 }
 
-macro_rules! create_general_register_accessors {
+macro_rules! abcd_register_accessors {
     ($register_letter:ident) => {
         paste! {
             pub fn [<get_e $register_letter x>](&self) -> u32 {
@@ -669,11 +709,11 @@ macro_rules! create_general_register_accessors {
             }
 
             pub fn [<get_ $register_letter x>](&self) -> u16 {
-                self.[<e $register_letter x>].get_high_16()
+                self.[<e $register_letter x>].get_low_16()
             }
 
             pub fn [<set_ $register_letter x>](&mut self, value: u16) {
-                self.[<e $register_letter x>].set_high_16(value)
+                self.[<e $register_letter x>].set_low_16(value)
             }
 
             pub fn [<get_ $register_letter h>](&self) -> u8 {
@@ -694,11 +734,44 @@ macro_rules! create_general_register_accessors {
         }
     };
 }
+
 impl Registers {
-    create_general_register_accessors!(a);
-    create_general_register_accessors!(b);
-    create_general_register_accessors!(c);
-    create_general_register_accessors!(d);
+    abcd_register_accessors!(a);
+    abcd_register_accessors!(b);
+    abcd_register_accessors!(c);
+    abcd_register_accessors!(d);
+
+    pub fn get_si(&self) -> u16 {
+        self.esi.get_low_16()
+    }
+
+    pub fn set_si(&mut self, value: u16) {
+        self.esi.set_low_16(value);
+    }
+
+    pub fn get_di(&self) -> u16 {
+        self.edi.get_low_16()
+    }
+
+    pub fn set_di(&mut self, value: u16) {
+        self.edi.set_low_16(value);
+    }
+
+    pub fn get_bp(&self) -> u16 {
+        self.ebp.get_low_16()
+    }
+
+    pub fn set_bp(&mut self, value: u16) {
+        self.ebp.set_low_16(value);
+    }
+
+    pub fn get_sp(&self) -> u16 {
+        self.esp.get_low_16()
+    }
+
+    pub fn set_sp(&mut self, value: u16) {
+        self.esp.set_low_16(value);
+    }
 
     pub fn get32(&self, register: &GeneralPurposeRegister) -> u32 {
         use GeneralPurposeRegister::*;
@@ -707,8 +780,8 @@ impl Registers {
             Ebx => self.get_ebx(),
             Ecx => self.get_ecx(),
             Edx => self.get_edx(),
-            Edi => self.edi,
             Esi => self.esi,
+            Edi => self.edi,
             Ebp => self.ebp,
             Esp => self.esp,
         }
@@ -721,8 +794,8 @@ impl Registers {
             Ebx => self.set_ebx(value),
             Ecx => self.set_ecx(value),
             Edx => self.set_edx(value),
-            Edi => self.edi = value,
             Esi => self.esi = value,
+            Edi => self.edi = value,
             Ebp => self.ebp = value,
             Esp => self.esp = value,
         }
@@ -735,6 +808,10 @@ impl Registers {
             Bx => self.get_bx(),
             Cx => self.get_cx(),
             Dx => self.get_dx(),
+            Si => self.get_si(),
+            Di => self.get_di(),
+            Bp => self.get_bp(),
+            Sp => self.get_sp(),
             Cs => self.cs,
             Ds => self.ds,
             Es => self.es,
@@ -751,6 +828,10 @@ impl Registers {
             Bx => self.set_bx(value),
             Cx => self.set_cx(value),
             Dx => self.set_dx(value),
+            Si => self.set_si(value),
+            Di => self.set_di(value),
+            Bp => self.set_bp(value),
+            Sp => self.set_bp(value),
             Cs => self.cs = value,
             Ds => self.ds = value,
             Es => self.es = value,
@@ -795,21 +876,19 @@ mod tests {
 
     /// Tests the getters and setters of a general register. `$register_letter` is expanded to form
     /// `e $register_letter x`, i.e. `eax`.
-    macro_rules! test_general_register_accessors {
+    macro_rules! test_abcd_register {
         ($register_letter:ident) => {
             paste! {
                 let mut registers = Registers::default();
                 registers.[<set_e $register_letter x>](0xdeadc0de);
                 assert_eq!(registers.[<get_e $register_letter x>](), 0xdeadc0de);
-                assert_eq!(registers.[<get_ $register_letter x>](), 0xdead);
+                assert_eq!(registers.[<get_ $register_letter x>](), 0xc0de);
                 assert_eq!(registers.[<get_ $register_letter h>](), 0xc0);
                 assert_eq!(registers.[<get_ $register_letter l>](), 0xde);
 
-                registers.[<set_ $register_letter x>](0xc0de);
-                registers.[<set_ $register_letter h>](0xb3);
-                registers.[<set_ $register_letter l>](0x3f);
-                assert_eq!(registers.[<get_e $register_letter x>](), 0xc0deb33f as u32);
-                assert_eq!(registers.[<get_ $register_letter x>](), 0xc0de);
+                registers.[<set_ $register_letter x>](0xb33f);
+                assert_eq!(registers.[<get_e $register_letter x>](), 0xdeadb33f as u32);
+                assert_eq!(registers.[<get_ $register_letter x>](), 0xb33f);
                 assert_eq!(registers.[<get_ $register_letter h>](), 0xb3);
                 assert_eq!(registers.[<get_ $register_letter l>](), 0x3f);
             }
@@ -818,21 +897,21 @@ mod tests {
 
     #[test]
     fn eax_get_and_set() {
-        test_general_register_accessors!(a);
+        test_abcd_register!(a);
     }
 
     #[test]
     fn ebx_get_and_set() {
-        test_general_register_accessors!(b);
+        test_abcd_register!(b);
     }
 
     #[test]
     fn ecx_get_and_set() {
-        test_general_register_accessors!(c);
+        test_abcd_register!(c);
     }
 
     #[test]
     fn edx_get_and_set() {
-        test_general_register_accessors!(d);
+        test_abcd_register!(d);
     }
 }
