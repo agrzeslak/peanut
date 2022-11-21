@@ -24,10 +24,11 @@ use crate::{instruction::Size, register::Register};
 /// 101     ch          bp          ebp
 /// 110     dh          si          esi
 /// 111     bh          di          edi
+#[derive(Debug, Default)]
 struct ModRM {
-    r#mod: Bitmap<2>,
-    reg: Bitmap<3>,
-    rm: Bitmap<3>,
+    pub r#mod: Bitmap<2>,
+    pub reg: Bitmap<3>,
+    pub rm: Bitmap<3>,
 }
 
 impl ModRM {
@@ -100,5 +101,99 @@ impl ModRM {
                 }
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_register() {
+        use Register::*;
+        use Size::*;
+
+        let mut bitmap_000 = Bitmap::<3>::new();
+        bitmap_000.set(0, false);
+        bitmap_000.set(1, false);
+        bitmap_000.set(2, false);
+
+        let mut bitmap_001 = Bitmap::<3>::new();
+        bitmap_001.set(0, true);
+        bitmap_001.set(1, false);
+        bitmap_001.set(2, false);
+
+        let mut bitmap_010 = Bitmap::<3>::new();
+        bitmap_010.set(0, false);
+        bitmap_010.set(1, true);
+        bitmap_010.set(2, false);
+
+        let mut bitmap_011 = Bitmap::<3>::new();
+        bitmap_011.set(0, true);
+        bitmap_011.set(1, true);
+        bitmap_011.set(2, false);
+
+        let mut bitmap_100 = Bitmap::<3>::new();
+        bitmap_100.set(0, false);
+        bitmap_100.set(1, false);
+        bitmap_100.set(2, true);
+
+        let mut bitmap_101 = Bitmap::<3>::new();
+        bitmap_101.set(0, true);
+        bitmap_101.set(1, false);
+        bitmap_101.set(2, true);
+
+        let mut bitmap_110 = Bitmap::<3>::new();
+        bitmap_110.set(0, false);
+        bitmap_110.set(1, true);
+        bitmap_110.set(2, true);
+
+        let mut bitmap_111 = Bitmap::<3>::new();
+        bitmap_111.set(0, true);
+        bitmap_111.set(1, true);
+        bitmap_111.set(2, true);
+
+        let mut modrm = ModRM::default();
+
+        modrm.reg = bitmap_000;
+        assert_eq!(modrm.resolve_register(&Byte), Al);
+        assert_eq!(modrm.resolve_register(&Word), Ax);
+        assert_eq!(modrm.resolve_register(&Dword), Eax);
+
+        modrm.reg = bitmap_001;
+        dbg!(&modrm);
+        assert_eq!(modrm.resolve_register(&Byte), Cl);
+        assert_eq!(modrm.resolve_register(&Word), Cx);
+        assert_eq!(modrm.resolve_register(&Dword), Ecx);
+
+        modrm.reg = bitmap_010;
+        assert_eq!(modrm.resolve_register(&Byte), Dl);
+        assert_eq!(modrm.resolve_register(&Word), Dx);
+        assert_eq!(modrm.resolve_register(&Dword), Edx);
+
+        modrm.reg = bitmap_011;
+        assert_eq!(modrm.resolve_register(&Byte), Bl);
+        assert_eq!(modrm.resolve_register(&Word), Bx);
+        assert_eq!(modrm.resolve_register(&Dword), Ebx);
+
+        modrm.reg = bitmap_100;
+        assert_eq!(modrm.resolve_register(&Byte), Ah);
+        assert_eq!(modrm.resolve_register(&Word), Sp);
+        assert_eq!(modrm.resolve_register(&Dword), Esp);
+
+        modrm.reg = bitmap_101;
+        assert_eq!(modrm.resolve_register(&Byte), Ch);
+        assert_eq!(modrm.resolve_register(&Word), Bp);
+        assert_eq!(modrm.resolve_register(&Dword), Ebp);
+
+        modrm.reg = bitmap_110;
+        assert_eq!(modrm.resolve_register(&Byte), Dh);
+        assert_eq!(modrm.resolve_register(&Word), Si);
+        assert_eq!(modrm.resolve_register(&Dword), Esi);
+
+        modrm.reg = bitmap_111;
+        assert_eq!(modrm.resolve_register(&Byte), Bh);
+        assert_eq!(modrm.resolve_register(&Word), Di);
+        assert_eq!(modrm.resolve_register(&Dword), Edi);
     }
 }
