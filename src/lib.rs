@@ -3,6 +3,7 @@ mod cpu;
 mod error;
 mod instruction;
 mod memory;
+mod modrm;
 mod register;
 
 use std::fs;

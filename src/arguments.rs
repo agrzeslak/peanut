@@ -7,5 +7,5 @@ use clap::{Parser, ValueHint};
 pub struct Arguments {
     /// Assembly file to be executed.
     #[arg(value_hint = ValueHint::FilePath)]
-    pub file_path: PathBuf, 
+    pub file_path: PathBuf,
 }
