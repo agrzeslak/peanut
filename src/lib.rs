@@ -5,6 +5,7 @@ mod instruction;
 mod memory;
 mod modrm;
 mod register;
+mod sib;
 
 use std::fs;
 

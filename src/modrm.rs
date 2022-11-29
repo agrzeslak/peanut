@@ -35,6 +35,8 @@ impl ModRM {
     pub fn resolve_register(&self, size: &Size) -> Register {
         use Register::*;
         use Size::*;
+        // FIXME: find a better approach than panicking if a qword is provided. Possible separate
+        //        size type.
         match (self.reg.get(2), self.reg.get(1), self.reg.get(0)) {
             (false, false, false) => {
                 match size {

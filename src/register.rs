@@ -145,12 +145,8 @@ macro_rules! eflags_accessors {
                 self.0.get($bit)
             }
 
-            pub fn [<set_ $field_name>](&mut self) {
+            pub fn [<set_ $field_name>](&mut self, value: bool) {
                 self.0.set($bit, true);
-            }
-
-            pub fn [<clear_ $field_name>](&mut self) {
-                self.0.set($bit, false);
             }
         }
     };
@@ -173,6 +169,12 @@ impl Eflags {
     eflags_accessors!(virtual_interrupt_flag, 19);
     eflags_accessors!(virtual_interrupt_pending_flag, 20);
     eflags_accessors!(identification_flag, 21);
+
+    /// Sets the parity flag if the least significant byte of the result of the last operation has
+    /// an even number of bits set to 1.
+    pub fn compute_parity_flag(&mut self, least_significant_byte: u8) {
+        self.set_parity_flag(least_significant_byte.count_ones() % 2 == 0);
+    }
 
     pub fn get_iopl(&self) -> CurrentPrivilegeLevel {
         let first_bit = self.0.get(12);
@@ -674,21 +676,21 @@ impl TryFrom<&Register> for Register8 {
 
 #[derive(Default)]
 pub struct Registers {
-    eax: u32,
-    ebx: u32,
-    ecx: u32,
-    edx: u32,
-    esi: u32,
-    edi: u32,
-    ebp: u32,
-    esp: u32,
-    cs: u16,
-    ds: u16,
-    es: u16,
-    fs: u16,
-    gs: u16,
-    ss: u16,
-    eflags: Eflags,
+    pub(crate) eax: u32,
+    pub(crate) ebx: u32,
+    pub(crate) ecx: u32,
+    pub(crate) edx: u32,
+    pub(crate) esi: u32,
+    pub(crate) edi: u32,
+    pub(crate) ebp: u32,
+    pub(crate) esp: u32,
+    pub(crate) cs: u16,
+    pub(crate) ds: u16,
+    pub(crate) es: u16,
+    pub(crate) fs: u16,
+    pub(crate) gs: u16,
+    pub(crate) ss: u16,
+    pub(crate) eflags: Eflags,
 
     /// Intel manual section 3.5 "INSTRUCTION POINTER".
     /// Contains offset in current code segment for next instruction to be executed. Cannot be
