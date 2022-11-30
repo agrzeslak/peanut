@@ -5,7 +5,7 @@ use paste::paste;
 
 use crate::{
     error::Error,
-    instruction::{NasmStr, Size},
+    instruction::{NasmStr, Size}, traits::LeastSignificantByte,
 };
 
 trait HighLowBytes32 {
@@ -172,8 +172,8 @@ impl Eflags {
 
     /// Sets the parity flag if the least significant byte of the result of the last operation has
     /// an even number of bits set to 1.
-    pub fn compute_parity_flag(&mut self, least_significant_byte: u8) {
-        self.set_parity_flag(least_significant_byte.count_ones() % 2 == 0);
+    pub(crate) fn compute_parity_flag(&mut self, value: &impl LeastSignificantByte) {
+        self.set_parity_flag(value.least_significant_byte().count_ones() % 2 == 0);
     }
 
     pub fn get_iopl(&self) -> CurrentPrivilegeLevel {

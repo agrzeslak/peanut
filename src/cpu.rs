@@ -19,7 +19,7 @@ impl Cpu {
     pub(crate) fn adc_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
     fn add<T: LeastSignificantByte + WrappingAdd>(&mut self, a: T, b: T) -> T {
         let result = a.wrapping_add(&b);
-        self.registers.eflags.compute_parity_flag(result.least_significant_byte()) ;
+        self.registers.eflags.compute_parity_flag(&result) ;
         result
     }
     pub(crate) fn add_al_imm8(&mut self, instruction: &Instruction) {
@@ -45,8 +45,7 @@ impl Cpu {
             OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
             OperandType::Register(register) => self.registers.get8(&register.try_into().unwrap()),
         };
-        let result = destination_value + value;
-        self.registers.eflags.compute_parity_flag(result);
+        let result = self.add(destination_value, value);
         self.registers.set8(&destination.try_into().unwrap(), result);
     }
     pub(crate) fn add_reg16_rm16(&mut self, instruction: &Instruction) { todo!() }
