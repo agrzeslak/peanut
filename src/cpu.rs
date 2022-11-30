@@ -1,5 +1,4 @@
-use num::traits::WrappingAdd;
-use num::FromPrimitive;
+use num::{traits::WrappingAdd, FromPrimitive};
 
 use crate::{instruction::{Instruction, OperandType}, register::Registers, traits::LeastSignificantByte};
 
@@ -36,12 +35,50 @@ impl Cpu {
         let result = self.add_with_carry(self.registers.get_eax(), immediate.parsed() as u32);
         self.registers.set_eax(result);
     }
-    pub(crate) fn adc_reg8_rm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn adc_reg16_rm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn adc_reg32_rm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn adc_rm8_reg8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn adc_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn adc_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
+    pub(crate) fn adc_reg8_rm8(&mut self, instruction: &Instruction) {
+        let destination = instruction.unwrap_register_operand(0);
+        let destination_value = self.registers.get8(&destination.try_into().unwrap());
+        let source_value = match &instruction.operands[1].operand_type() {
+            OperandType::Immediate(_) => unreachable!(),
+            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
+            OperandType::Register(register) => self.registers.get8(&register.try_into().unwrap()),
+        };
+        let result = self.add_with_carry(destination_value, source_value);
+        self.registers.set8(&destination.try_into().unwrap(), result);
+    }
+    pub(crate) fn adc_reg16_rm16(&mut self, instruction: &Instruction) {
+        let destination = instruction.unwrap_register_operand(0);
+        let destination_value = self.registers.get16(&destination.try_into().unwrap());
+        let source_value = match &instruction.operands[1].operand_type() {
+            OperandType::Immediate(_) => unreachable!(),
+            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
+            OperandType::Register(register) => self.registers.get16(&register.try_into().unwrap()),
+        };
+        let result = self.add_with_carry(destination_value, source_value);
+        self.registers.set16(&destination.try_into().unwrap(), result);
+    }
+    pub(crate) fn adc_reg32_rm32(&mut self, instruction: &Instruction) {
+        let destination = instruction.unwrap_register_operand(0);
+        let destination_value = self.registers.get32(&destination.try_into().unwrap());
+        let source_value = match &instruction.operands[1].operand_type() {
+            OperandType::Immediate(_) => unreachable!(),
+            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
+            OperandType::Register(register) => self.registers.get32(&register.try_into().unwrap()),
+        };
+        let result = self.add_with_carry(destination_value, source_value);
+        self.registers.set32(&destination.try_into().unwrap(), result);
+    }
+    pub(crate) fn adc_rm8_reg8(&mut self, instruction: &Instruction) {
+        // let destination = match &instruction.operands[0].operand_type() {
+        //     OperandType::Immediate(_) => unreachable!(),
+        //     OperandType::Memory(effective_address) => todo!("resolve effective address to write to"),
+        //     OperandType::Register(register) => self.registers.get8(&registers.try_into().unwrap()),
+        // };
+        // let result = self.add_with_carry(destination_value, source_value);
+        todo!();
+    }
+    pub(crate) fn adc_rm16_reg16(&mut self, instruction: &Instruction) {  }
+    pub(crate) fn adc_rm32_reg32(&mut self, instruction: &Instruction) {  }
     /// Add the two operands together, wrapping if an overflow occurs, and set the appropriate
     /// flags.
     // TODO: Tests, especially for wrapping.
@@ -71,16 +108,36 @@ impl Cpu {
     pub(crate) fn add_reg8_rm8(&mut self, instruction: &Instruction) {
         let destination = instruction.unwrap_register_operand(0);
         let destination_value = self.registers.get8(&destination.try_into().unwrap());
-        let value = match &instruction.operands.get(1).unwrap().operand_type() {
-            OperandType::Immediate(_) => panic!("immediate value cannot be used for rm operand"),
+        let source_value = match &instruction.operands[1].operand_type() {
+            OperandType::Immediate(_) => unreachable!(),
             OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
             OperandType::Register(register) => self.registers.get8(&register.try_into().unwrap()),
         };
-        let result = self.add(destination_value, value);
+        let result = self.add(destination_value, source_value);
         self.registers.set8(&destination.try_into().unwrap(), result);
     }
-    pub(crate) fn add_reg16_rm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn add_reg32_rm32(&mut self, instruction: &Instruction) { todo!() }
+    pub(crate) fn add_reg16_rm16(&mut self, instruction: &Instruction) {
+        let destination = instruction.unwrap_register_operand(0);
+        let destination_value = self.registers.get16(&destination.try_into().unwrap());
+        let source_value = match &instruction.operands[1].operand_type() {
+            OperandType::Immediate(_) => unreachable!(),
+            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
+            OperandType::Register(register) => self.registers.get16(&register.try_into().unwrap()),
+        };
+        let result = self.add(destination_value, source_value);
+        self.registers.set16(&destination.try_into().unwrap(), result);
+    }
+    pub(crate) fn add_reg32_rm32(&mut self, instruction: &Instruction) {
+        let destination = instruction.unwrap_register_operand(0);
+        let destination_value = self.registers.get32(&destination.try_into().unwrap());
+        let source_value = match &instruction.operands[1].operand_type() {
+            OperandType::Immediate(_) => unreachable!(),
+            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
+            OperandType::Register(register) => self.registers.get32(&register.try_into().unwrap()),
+        };
+        let result = self.add(destination_value, source_value);
+        self.registers.set32(&destination.try_into().unwrap(), result);
+    }
     pub(crate) fn add_rm8_imm8(&mut self, instruction: &Instruction) { todo!() }
     pub(crate) fn add_rm8_reg8(&mut self, instruction: &Instruction) { todo!() }
     pub(crate) fn add_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
