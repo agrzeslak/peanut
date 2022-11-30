@@ -1,4 +1,5 @@
 use num::traits::WrappingAdd;
+use num::FromPrimitive;
 
 use crate::{instruction::{Instruction, OperandType}, register::Registers, traits::LeastSignificantByte};
 
@@ -8,18 +9,48 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub(crate) fn adc_al_imm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn adc_ax_imm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn adc_eax_imm32(&mut self, instruction: &Instruction) { todo!() }
+    /// Add the two operands and carry together, wrapping if an overflow occurs, and set the
+    /// appropriate flags.
+    // TODO: Tests, especially for wrapping.
+    fn add_with_carry<T>(&mut self, a: T, b: T) -> T
+    where
+        T: LeastSignificantByte + WrappingAdd + FromPrimitive
+    {
+        let carry = self.registers.eflags.get_carry_flag() as u8;
+        let result = a + b + FromPrimitive::from_u8(carry).unwrap();
+        self.registers.eflags.compute_parity_flag(&result) ;
+        result
+    }
+    pub(crate) fn adc_al_imm8(&mut self, instruction: &Instruction) {
+        let immediate = instruction.unwrap_immediate_operand(0);
+        let result = self.add_with_carry(self.registers.get_al(), immediate.parsed() as u8);
+        self.registers.set_al(result);
+    }
+    pub(crate) fn adc_ax_imm16(&mut self, instruction: &Instruction) {
+        let immediate = instruction.unwrap_immediate_operand(0);
+        let result = self.add_with_carry(self.registers.get_ax(), immediate.parsed() as u16);
+        self.registers.set_ax(result);
+    }
+    pub(crate) fn adc_eax_imm32(&mut self, instruction: &Instruction) {
+        let immediate = instruction.unwrap_immediate_operand(0);
+        let result = self.add_with_carry(self.registers.get_eax(), immediate.parsed() as u32);
+        self.registers.set_eax(result);
+    }
     pub(crate) fn adc_reg8_rm8(&mut self, instruction: &Instruction) { todo!() }
     pub(crate) fn adc_reg16_rm16(&mut self, instruction: &Instruction) { todo!() }
     pub(crate) fn adc_reg32_rm32(&mut self, instruction: &Instruction) { todo!() }
     pub(crate) fn adc_rm8_reg8(&mut self, instruction: &Instruction) { todo!() }
     pub(crate) fn adc_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
     pub(crate) fn adc_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
-    fn add<T: LeastSignificantByte + WrappingAdd>(&mut self, a: T, b: T) -> T {
-        let result = a.wrapping_add(&b);
-        self.registers.eflags.compute_parity_flag(&result) ;
+    /// Add the two operands together, wrapping if an overflow occurs, and set the appropriate
+    /// flags.
+    // TODO: Tests, especially for wrapping.
+    fn add<T>(&mut self, a: T, b: T) -> T
+    where
+        T: LeastSignificantByte + WrappingAdd
+    {
+        let result = a + b;
+        self.registers.eflags.compute_parity_flag(&result);
         result
     }
     pub(crate) fn add_al_imm8(&mut self, instruction: &Instruction) {
