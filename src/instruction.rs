@@ -464,6 +464,46 @@ impl<'a> InstructionDescriptor<'a> {
         }
     }
 
+    pub fn _resolve_matching_cpu_function(
+        &self,
+        operands: &Vec<Operand>,
+    ) -> Result<Box<dyn FnMut(&mut crate::cpu::alternate::Cpu)>, Error> {
+        let cpu_function = self.resolve_matching_cpu_function(operands)?;
+        let source = 0;
+        let function = |cpu: &mut crate::cpu::alternate::Cpu| {
+            crate::cpu::alternate::Cpu::adc_al_imm8(cpu, source);
+        };
+        Ok(Box::new(function))
+
+        let mut cpu_function = None;
+
+        if let Some(map) = &self.operand_function_map_8 {
+            if map.instruction_operand_format.matches(operands) {
+                cpu_function = Some(map.cpu_function);
+            }
+        };
+
+        if let Some(map) = &self.operand_function_map_16 {
+            if map.instruction_operand_format.matches(operands) {
+                if cpu_function.is_some() {
+                    return Err(Error::AmbiguousInstruction(format!("ambigious operand(s)")));
+                }
+                cpu_function = Some(map.cpu_function);
+            }
+        };
+
+        if let Some(map) = &self.operand_function_map_32 {
+            if map.instruction_operand_format.matches(operands) {
+                if cpu_function.is_some() {
+                    return Err(Error::AmbiguousInstruction(format!("ambigious operand(s)")));
+                }
+                cpu_function = Some(map.cpu_function);
+            }
+        };
+
+        Ok(cpu_function)
+    }
+
     /// An `InstructionDescriptor` may have multiple `CpuFunction`, each for different operands.
     /// For a given set of operands, this function will find the appropriate `CpuFunction`, if it
     /// exists.
@@ -1258,21 +1298,21 @@ pub enum OperandType {
 }
 
 impl OperandType {
-    pub fn unwrap_immediate(&self) -> &Immediate {
+    pub(crate) fn unwrap_immediate(&self) -> &Immediate {
         let Self::Immediate(immediate) = self else {
             panic!("attempted to unwrap a non-immediate variant as an immediate");
         };
         immediate
     }
 
-    pub fn unwrap_effective_address(&self) -> &EffectiveAddress {
+    pub(crate) fn unwrap_effective_address(&self) -> &EffectiveAddress {
         let Self::Memory(effective_address) = self else {
             panic!("attempted to unwrap a non-effective address variant as an effective address");
         };
         effective_address
     }
 
-    pub fn unwrap_register(&self) -> &Register {
+    pub(crate) fn unwrap_register(&self) -> &Register {
         let Self::Register(register) = self else {
             panic!("attempted to unwrap a non-register variant as an register");
         };
