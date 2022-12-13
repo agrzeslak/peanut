@@ -1,6 +1,6 @@
 use bitmaps::Bitmap;
 
-use crate::{instruction::Size, register::Register};
+use crate::{instruction::Size, register::{Register, Register8, Register16, Register32}};
 
 ///  Intel manual section 2.1.
 ///  <http://c-jump.com/CIS77/CPU/x86/X77_0060_mod_reg_r_m_byte.htm>
@@ -33,72 +33,71 @@ struct ModRM {
 
 impl ModRM {
     pub fn resolve_register(&self, size: &Size) -> Register {
-        use Register::*;
         use Size::*;
         // FIXME: find a better approach than panicking if a qword is provided. Possible separate
         //        size type.
         match (self.reg.get(2), self.reg.get(1), self.reg.get(0)) {
             (false, false, false) => {
                 match size {
-                    Byte => Al,
-                    Word => Ax,
-                    Dword => Eax,
+                    Byte => Register8::Al.into(),
+                    Word => Register16::Ax.into(),
+                    Dword => Register32::Eax.into(),
                     Qword => unimplemented!(), 
                 }
             },
             (false, false, true) => {
                 match size {
-                    Byte => Cl,
-                    Word => Cx,
-                    Dword => Ecx,
+                    Byte => Register8::Cl.into(),
+                    Word => Register16::Cx.into(),
+                    Dword => Register32::Ecx.into(),
                     Qword => unimplemented!(),
                 }
             },
             (false, true, false) => {
                 match size {
-                    Byte => Dl,
-                    Word => Dx,
-                    Dword => Edx,
+                    Byte => Register8::Dl.into(),
+                    Word => Register16::Dx.into(),
+                    Dword => Register32::Edx.into(),
                     Qword => unimplemented!(),
                 }
             },
             (false, true, true) => {
                 match size {
-                    Byte => Bl,
-                    Word => Bx,
-                    Dword => Ebx,
+                    Byte => Register8::Bl.into(),
+                    Word => Register16::Bx.into(),
+                    Dword => Register32::Ebx.into(),
                     Qword => unimplemented!(),
                 }
             },
             (true, false, false) => {
                 match size {
-                    Byte => Ah,
-                    Word => Sp,
-                    Dword => Esp,
+                    Byte => Register8::Ah.into(),
+                    Word => Register16::Sp.into(),
+                    Dword => Register32::Esp.into(),
                     Qword => unimplemented!(),
                 }
             },
             (true, false, true) => {
                 match size {
-                    Byte => Ch,
-                    Word => Bp,
-                    Dword => Ebp,
+                    Byte => Register8::Ch.into(),
+                    Word => Register16::Bp.into(),
+                    Dword => Register32::Ebp.into(),
                     Qword => unimplemented!(),
                 }
             },
             (true, true, false) => {
                 match size {
-                    Byte => Dh,
-                    Word => Si,
-                    Dword => Esi,
+                    Byte => Register8::Dh.into(),
+                    Word => Register16::Si.into(),
+                    Dword => Register32::Esi.into(),
                     Qword => unimplemented!(),
                 }
             },
             (true, true, true) => {
                 match size {
-                    Byte => Bh,
-                    Word => Di,
-                    Dword => Edi,
+                    Byte => Register8::Bh.into(),
+                    Word => Register16::Di.into(),
+                    Dword => Register32::Edi.into(),
                     Qword => unimplemented!(),
                 }
             },
@@ -112,7 +111,6 @@ mod tests {
 
     #[test]
     fn resolve_register() {
-        use Register::*;
         use Size::*;
 
         let mut bitmap_000 = Bitmap::<3>::new();
@@ -158,44 +156,44 @@ mod tests {
         let mut modrm = ModRM::default();
 
         modrm.reg = bitmap_000;
-        assert_eq!(modrm.resolve_register(&Byte), Al);
-        assert_eq!(modrm.resolve_register(&Word), Ax);
-        assert_eq!(modrm.resolve_register(&Dword), Eax);
+        assert_eq!(modrm.resolve_register(&Byte), Register8::Al.into());
+        assert_eq!(modrm.resolve_register(&Word), Register16::Ax.into());
+        assert_eq!(modrm.resolve_register(&Dword), Register32::Eax.into());
 
         modrm.reg = bitmap_001;
         dbg!(&modrm);
-        assert_eq!(modrm.resolve_register(&Byte), Cl);
-        assert_eq!(modrm.resolve_register(&Word), Cx);
-        assert_eq!(modrm.resolve_register(&Dword), Ecx);
+        assert_eq!(modrm.resolve_register(&Byte), Register8::Cl.into());
+        assert_eq!(modrm.resolve_register(&Word), Register16::Cx.into());
+        assert_eq!(modrm.resolve_register(&Dword), Register32::Ecx.into());
 
         modrm.reg = bitmap_010;
-        assert_eq!(modrm.resolve_register(&Byte), Dl);
-        assert_eq!(modrm.resolve_register(&Word), Dx);
-        assert_eq!(modrm.resolve_register(&Dword), Edx);
+        assert_eq!(modrm.resolve_register(&Byte), Register8::Dl.into());
+        assert_eq!(modrm.resolve_register(&Word), Register16::Dx.into());
+        assert_eq!(modrm.resolve_register(&Dword), Register32::Edx.into());
 
         modrm.reg = bitmap_011;
-        assert_eq!(modrm.resolve_register(&Byte), Bl);
-        assert_eq!(modrm.resolve_register(&Word), Bx);
-        assert_eq!(modrm.resolve_register(&Dword), Ebx);
+        assert_eq!(modrm.resolve_register(&Byte), Register8::Bl.into());
+        assert_eq!(modrm.resolve_register(&Word), Register16::Bx.into());
+        assert_eq!(modrm.resolve_register(&Dword), Register32::Ebx.into());
 
         modrm.reg = bitmap_100;
-        assert_eq!(modrm.resolve_register(&Byte), Ah);
-        assert_eq!(modrm.resolve_register(&Word), Sp);
-        assert_eq!(modrm.resolve_register(&Dword), Esp);
+        assert_eq!(modrm.resolve_register(&Byte), Register8::Ah.into());
+        assert_eq!(modrm.resolve_register(&Word), Register16::Sp.into());
+        assert_eq!(modrm.resolve_register(&Dword), Register32::Esp.into());
 
         modrm.reg = bitmap_101;
-        assert_eq!(modrm.resolve_register(&Byte), Ch);
-        assert_eq!(modrm.resolve_register(&Word), Bp);
-        assert_eq!(modrm.resolve_register(&Dword), Ebp);
+        assert_eq!(modrm.resolve_register(&Byte), Register8::Ch.into());
+        assert_eq!(modrm.resolve_register(&Word), Register16::Bp.into());
+        assert_eq!(modrm.resolve_register(&Dword), Register32::Ebp.into());
 
         modrm.reg = bitmap_110;
-        assert_eq!(modrm.resolve_register(&Byte), Dh);
-        assert_eq!(modrm.resolve_register(&Word), Si);
-        assert_eq!(modrm.resolve_register(&Dword), Esi);
+        assert_eq!(modrm.resolve_register(&Byte), Register8::Dh.into());
+        assert_eq!(modrm.resolve_register(&Word), Register16::Si.into());
+        assert_eq!(modrm.resolve_register(&Dword), Register32::Esi.into());
 
         modrm.reg = bitmap_111;
-        assert_eq!(modrm.resolve_register(&Byte), Bh);
-        assert_eq!(modrm.resolve_register(&Word), Di);
-        assert_eq!(modrm.resolve_register(&Dword), Edi);
+        assert_eq!(modrm.resolve_register(&Byte), Register8::Bh.into());
+        assert_eq!(modrm.resolve_register(&Word), Register16::Di.into());
+        assert_eq!(modrm.resolve_register(&Dword), Register32::Edi.into());
     }
 }

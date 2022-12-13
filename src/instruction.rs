@@ -1,4 +1,8 @@
-use crate::{cpu::Cpu, error::Error, register::Register};
+use crate::{
+    cpu::Cpu,
+    error::Error,
+    register::{Register, Register16, Register32, Register8},
+};
 
 #[derive(Debug)]
 enum InstructionOperandFormat {
@@ -157,22 +161,22 @@ impl InstructionOperandFormat {
         use InstructionOperandFormat as F;
         match (self, operands.get(0), operands.get(1), operands.get(2)) {
             (F::Cs, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register::Cs)
+                op.operand_type() == &OperandType::Register(Register16::Cs.into())
             }
             (F::Ds, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register::Ds)
+                op.operand_type() == &OperandType::Register(Register16::Ds.into())
             }
             (F::Es, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register::Es)
+                op.operand_type() == &OperandType::Register(Register16::Es.into())
             }
             (F::Fs, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register::Fs)
+                op.operand_type() == &OperandType::Register(Register16::Fs.into())
             }
             (F::Gs, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register::Gs)
+                op.operand_type() == &OperandType::Register(Register16::Gs.into())
             }
             (F::Ss, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register::Ss)
+                op.operand_type() == &OperandType::Register(Register16::Ss.into())
             }
             (F::Const3, Some(op), None, None) => validate_const(op, 3),
             (F::Imm8, Some(op), None, None) => validate_immediate(op, Size::Byte),
@@ -272,15 +276,18 @@ impl InstructionOperandFormat {
             // (F::Far32, Some(op), None, None) => {},
             (F::Rm8Cl, Some(op1), Some(op2), None) => {
                 validate_register_or_memory(op1, Size::Byte)
-                    && op2.operand_type() == &OperandType::Register(Register::Cl)
+                    && op2.operand_type()
+                        == &OperandType::Register(Register8::Cl.into())
             }
             (F::Rm16Cl, Some(op1), Some(op2), None) => {
                 validate_register_or_memory(op1, Size::Word)
-                    && op2.operand_type() == &OperandType::Register(Register::Cl)
+                    && op2.operand_type()
+                        == &OperandType::Register(Register8::Cl.into())
             }
             (F::Rm32Cl, Some(op1), Some(op2), None) => {
                 validate_register_or_memory(op1, Size::Dword)
-                    && op2.operand_type() == &OperandType::Register(Register::Cl)
+                    && op2.operand_type()
+                        == &OperandType::Register(Register8::Cl.into())
             }
             // (F::Reg32Cr, Some(op1), Some(op2), None) => {},
             // (F::Reg32Dr, Some(op1), Some(op2), None) => {},
@@ -308,23 +315,25 @@ impl InstructionOperandFormat {
             (F::Rm16Reg16Cl, Some(op1), Some(op2), Some(op3)) => {
                 validate_register_or_memory(op1, Size::Word)
                     && validate_register(op2, Size::Word)
-                    && op3.operand_type() == &OperandType::Register(Register::Cl)
+                    && op3.operand_type()
+                        == &OperandType::Register(Register8::Cl.into())
             }
             (F::Rm32Reg32Cl, Some(op1), Some(op2), Some(op3)) => {
                 validate_register_or_memory(op1, Size::Dword)
                     && validate_register(op2, Size::Dword)
-                    && op3.operand_type() == &OperandType::Register(Register::Cl)
+                    && op3.operand_type()
+                        == &OperandType::Register(Register8::Cl.into())
             }
             (F::AlImm8, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Al)
+                op1.operand_type() == &OperandType::Register(Register8::Al.into())
                     && validate_immediate(op2, Size::Byte)
             }
             (F::AxImm16, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Ax)
+                op1.operand_type() == &OperandType::Register(Register16::Ax.into())
                     && validate_immediate(op2, Size::Word)
             }
             (F::EaxImm32, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Eax)
+                op1.operand_type() == &OperandType::Register(Register32::Eax.into())
                     && validate_immediate(op2, Size::Dword)
             }
             (F::Imm16Imm16, Some(op1), Some(op2), None) => {
@@ -334,19 +343,19 @@ impl InstructionOperandFormat {
                 validate_immediate(op1, Size::Word) && validate_immediate(op2, Size::Dword)
             }
             (F::AxReg16, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Ax)
+                op1.operand_type() == &OperandType::Register(Register16::Ax.into())
                     && validate_register(op2, Size::Word)
             }
             (F::EaxReg32, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Eax)
+                op1.operand_type() == &OperandType::Register(Register32::Eax.into())
                     && validate_register(op2, Size::Dword)
             }
             (F::AxImm8, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Ax)
+                op1.operand_type() == &OperandType::Register(Register16::Ax.into())
                     && validate_immediate(op2, Size::Byte)
             }
             (F::EaxImm8, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Eax)
+                op1.operand_type() == &OperandType::Register(Register32::Eax.into())
                     && validate_immediate(op2, Size::Byte)
             }
             // (F::AlMoffs8, Some(op1), Some(op2), None) => {},
@@ -356,47 +365,57 @@ impl InstructionOperandFormat {
             // (F::Moffs16Ax, Some(op1), Some(op2), None) => {},
             // (F::Moffs32Eax, Some(op1), Some(op2), None) => {},
             (F::AlDx, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Al)
-                    && op2.operand_type() == &OperandType::Register(Register::Dx)
+                op1.operand_type() == &OperandType::Register(Register8::Al.into())
+                    && op2.operand_type()
+                        == &OperandType::Register(Register16::Dx.into())
             }
             (F::AxDx, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Ax)
-                    && op2.operand_type() == &OperandType::Register(Register::Dx)
+                op1.operand_type() == &OperandType::Register(Register16::Ax.into())
+                    && op2.operand_type()
+                        == &OperandType::Register(Register16::Dx.into())
             }
             (F::EaxDx, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Eax)
-                    && op2.operand_type() == &OperandType::Register(Register::Dx)
+                op1.operand_type() == &OperandType::Register(Register32::Eax.into())
+                    && op2.operand_type()
+                        == &OperandType::Register(Register16::Dx.into())
             }
             (F::DxAl, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Dx)
-                    && op2.operand_type() == &OperandType::Register(Register::Al)
+                op1.operand_type() == &OperandType::Register(Register16::Dx.into())
+                    && op2.operand_type()
+                        == &OperandType::Register(Register8::Al.into())
             }
             (F::DxAx, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Dx)
-                    && op2.operand_type() == &OperandType::Register(Register::Ax)
+                op1.operand_type() == &OperandType::Register(Register16::Dx.into())
+                    && op2.operand_type()
+                        == &OperandType::Register(Register16::Ax.into())
             }
             (F::DxEax, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register::Dx)
-                    && op2.operand_type() == &OperandType::Register(Register::Eax)
+                op1.operand_type() == &OperandType::Register(Register16::Dx.into())
+                    && op2.operand_type()
+                        == &OperandType::Register(Register32::Eax.into())
             }
             (F::Imm8Al, Some(op1), Some(op2), None) => {
                 validate_immediate(op1, Size::Byte)
-                    && op2.operand_type() == &OperandType::Register(Register::Al)
+                    && op2.operand_type()
+                        == &OperandType::Register(Register8::Al.into())
             }
             (F::Imm8Ax, Some(op1), Some(op2), None) => {
                 validate_immediate(op1, Size::Byte)
-                    && op2.operand_type() == &OperandType::Register(Register::Ax)
+                    && op2.operand_type()
+                        == &OperandType::Register(Register16::Ax.into())
             }
             (F::Imm8Eax, Some(op1), Some(op2), None) => {
                 validate_immediate(op1, Size::Byte)
-                    && op2.operand_type() == &OperandType::Register(Register::Eax)
+                    && op2.operand_type()
+                        == &OperandType::Register(Register32::Eax.into())
             }
             (F::Imm8Imm16, Some(op1), Some(op2), None) => {
                 validate_immediate(op1, Size::Byte) && validate_immediate(op2, Size::Word)
             }
             (F::Reg8Cl, Some(op1), Some(op2), None) => {
                 validate_register(op1, Size::Byte)
-                    && op2.operand_type() == &OperandType::Register(Register::Cl)
+                    && op2.operand_type()
+                        == &OperandType::Register(Register8::Cl.into())
             }
             _ => false,
         }
@@ -966,20 +985,12 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
         }
 
         if let Ok(register) = Register::try_from(value) {
-            if !(register == Register::Eax
-                || register == Register::Ebx
-                || register == Register::Ecx
-                || register == Register::Edx
-                || register == Register::Edi
-                || register == Register::Esi
-                || register == Register::Ebp
-                || register == Register::Esp)
-            {
-                return Err(Error::CannotParseInstruction(
+            match register {
+                Register::Register32(_) => return Ok(Self::Register(register)),
+                _ => return Err(Error::CannotParseInstruction(
                     format!("invalid effective address (must use only valid 32-bit registers, tried to use {})", register)
-                ));
+                )),
             }
-            return Ok(Self::Register(register));
         }
 
         Err(Error::CannotParseInstruction(format!(
