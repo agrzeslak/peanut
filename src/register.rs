@@ -241,28 +241,6 @@ impl Display for Register32 {
     }
 }
 
-impl TryFrom<&Register> for Register32 {
-    type Error = Error;
-
-    fn try_from(register: &Register) -> Result<Self, Self::Error> {
-        use Register::*;
-        match register {
-            Eax => Ok(Self::Eax),
-            Ebx => Ok(Self::Ebx),
-            Ecx => Ok(Self::Ecx),
-            Edx => Ok(Self::Edx),
-            Esi => Ok(Self::Esi),
-            Edi => Ok(Self::Edi),
-            Ebp => Ok(Self::Ebp),
-            Esp => Ok(Self::Esp),
-            _ => Err(Error::CannotCovertType(format!(
-                "{} is not a general purpose (32-bit) register",
-                register
-            ))),
-        }
-    }
-}
-
 impl TryFrom<&NasmStr<'_>> for Register32 {
     type Error = Error;
 
@@ -324,33 +302,6 @@ impl Display for Register16 {
         };
 
         write!(f, "{register}")
-    }
-}
-
-impl TryFrom<&Register> for Register16 {
-    type Error = Error;
-
-    fn try_from(register: &Register) -> Result<Self, Self::Error> {
-        match register {
-            Ax => Ok(Self::Ax),
-            Bx => Ok(Self::Bx),
-            Cx => Ok(Self::Cx),
-            Dx => Ok(Self::Dx),
-            Si => Ok(Self::Si),
-            Di => Ok(Self::Di),
-            Bp => Ok(Self::Bp),
-            Sp => Ok(Self::Sp),
-            Cs => Ok(Self::Cs),
-            Ds => Ok(Self::Ds),
-            Ss => Ok(Self::Ss),
-            Es => Ok(Self::Es),
-            Fs => Ok(Self::Fs),
-            Gs => Ok(Self::Gs),
-            _ => Err(Error::CannotCovertType(format!(
-                "{} is not a 16-bit register",
-                register
-            ))),
-        }
     }
 }
 
@@ -429,28 +380,6 @@ impl TryFrom<&Register> for Register8 {
             _ => Err(Error::CannotCovertType(format!(
                 "{} is not a 8-bit register",
                 register
-            ))),
-        }
-    }
-}
-
-impl TryFrom<&NasmStr<'_>> for Register8 {
-    type Error = Error;
-
-    fn try_from(value: &NasmStr<'_>) -> Result<Self, Self::Error> {
-        use Register8::*;
-        match value.0.to_uppercase().as_str() {
-            "AH" => Ok(Ah),
-            "AL" => Ok(Al),
-            "BH" => Ok(Bh),
-            "BL" => Ok(Bl),
-            "CH" => Ok(Ch),
-            "CL" => Ok(Cl),
-            "DH" => Ok(Dh),
-            "DL" => Ok(Dl),
-            _ => Err(Error::CannotParseInstruction(format!(
-                "{} is not a valid 8-bit register",
-                value.0
             ))),
         }
     }
