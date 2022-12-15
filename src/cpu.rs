@@ -2,7 +2,7 @@ use num::{traits::WrappingAdd, FromPrimitive};
 
 use crate::{instruction::{Instruction, OperandType}, register::Registers, traits::LeastSignificantByte};
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Cpu {
     pub(crate) registers: Registers,
 }

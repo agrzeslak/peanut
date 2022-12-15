@@ -1261,7 +1261,7 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OperandType {
     Immediate(Immediate),
     Memory(EffectiveAddress),
@@ -1314,7 +1314,7 @@ impl TryFrom<&NasmStr<'_>> for OperandType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Size {
     Byte = 8,
     Word = 16,
@@ -1340,7 +1340,7 @@ impl TryFrom<&NasmStr<'_>> for Size {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Operand {
     operand_type: OperandType,
     size_directive: Option<Size>,

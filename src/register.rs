@@ -136,6 +136,7 @@ pub enum CurrentPrivilegeLevel {
 /// ID (Identification Flag), bit 21, system flag.
 /// The ability of a program to set or clear this flag indicates support for the CPUID
 /// instruction.
+#[derive(Clone, Debug)]
 pub struct Eflags(Bitmap<32>);
 
 macro_rules! eflags_accessors {
@@ -555,7 +556,7 @@ impl TryFrom<&NasmStr<'_>> for Register {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Registers {
     pub(crate) eax: u32,
     pub(crate) ebx: u32,
