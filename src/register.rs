@@ -363,28 +363,6 @@ impl Display for Register8 {
     }
 }
 
-impl TryFrom<&Register> for Register8 {
-    type Error = Error;
-
-    fn try_from(register: &Register) -> Result<Self, Self::Error> {
-        use Register::*;
-        match register {
-            Ah => Ok(Self::Ah),
-            Al => Ok(Self::Al),
-            Bh => Ok(Self::Bh),
-            Bl => Ok(Self::Bl),
-            Ch => Ok(Self::Ch),
-            Cl => Ok(Self::Cl),
-            Dh => Ok(Self::Dh),
-            Dl => Ok(Self::Dl),
-            _ => Err(Error::CannotCovertType(format!(
-                "{} is not a 8-bit register",
-                register
-            ))),
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Register {
     Register32(Register32),
