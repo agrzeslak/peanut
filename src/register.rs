@@ -241,6 +241,20 @@ impl Display for Register32 {
     }
 }
 
+impl TryFrom<Register> for Register32 {
+    type Error = Error;
+
+    fn try_from(register: Register) -> Result<Self, Self::Error> {
+        match register {
+            Register::Register32(register) => Ok(register),
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a general purpose (32-bit) register",
+                register
+            ))),
+        }
+    }
+}
+
 impl TryFrom<&NasmStr<'_>> for Register32 {
     type Error = Error;
 
@@ -305,6 +319,20 @@ impl Display for Register16 {
     }
 }
 
+impl TryFrom<Register> for Register16 {
+    type Error = Error;
+
+    fn try_from(register: Register) -> Result<Self, Self::Error> {
+        match register {
+            Register::Register16(register) => Ok(register),
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a 16-bit register",
+                register
+            ))),
+        }
+    }
+}
+
 impl TryFrom<&NasmStr<'_>> for Register16 {
     type Error = Error;
 
@@ -360,6 +388,20 @@ impl Display for Register8 {
         };
 
         write!(f, "{register}")
+    }
+}
+
+impl TryFrom<Register> for Register8 {
+    type Error = Error;
+
+    fn try_from(register: Register) -> Result<Self, Self::Error> {
+        match register {
+            Register::Register8(register) => Ok(register),
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a 8-bit register",
+                register
+            ))),
+        }
     }
 }
 

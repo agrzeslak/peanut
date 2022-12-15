@@ -1254,21 +1254,21 @@ pub enum OperandType {
 }
 
 impl OperandType {
-    pub fn unwrap_immediate(&self) -> &Immediate {
+    pub fn unwrap_immediate(self) -> Immediate {
         let Self::Immediate(immediate) = self else {
             panic!("attempted to unwrap a non-immediate variant as an immediate");
         };
         immediate
     }
 
-    pub fn unwrap_effective_address(&self) -> &EffectiveAddress {
+    pub fn unwrap_effective_address(self) -> EffectiveAddress {
         let Self::Memory(effective_address) = self else {
             panic!("attempted to unwrap a non-effective address variant as an effective address");
         };
         effective_address
     }
 
-    pub fn unwrap_register(&self) -> &Register {
+    pub fn unwrap_register(self) -> Register {
         let Self::Register(register) = self else {
             panic!("attempted to unwrap a non-register variant as an register");
         };
@@ -1392,7 +1392,7 @@ pub struct Instruction {
 
 impl Instruction {
     /// Unwrap the operand at the given index as an `Immediate`, otherwise panic.
-    pub fn unwrap_immediate_operand(&self, index: usize) -> &Immediate {
+    pub(crate) fn unwrap_immediate_operand(&self, index: usize) -> Immediate {
         self.operands
             .get(index)
             .unwrap()
@@ -1401,7 +1401,7 @@ impl Instruction {
     }
 
     /// Unwrap the operand at the given index as an `EffectiveAddress`, otherwise panic.
-    pub fn unwrap_effective_address_operand(&self, index: usize) -> &EffectiveAddress {
+    pub(crate) fn unwrap_effective_address_operand(&self, index: usize) -> EffectiveAddress {
         self.operands
             .get(index)
             .unwrap()
@@ -1410,13 +1410,39 @@ impl Instruction {
     }
 
     /// Unwrap the operand at the given index as a `Register`, otherwise panic.
-    pub fn unwrap_register_operand(&self, index: usize) -> &Register {
+    pub(crate) fn unwrap_register_operand(&self, index: usize) -> Register {
         self.operands
             .get(index)
             .unwrap()
             .operand_type
             .unwrap_register()
     }
+
+    pub(crate) fn unwrap_register_or_memory(&self, index: usize) -> RegisterOrMemory {
+        // FIXME: can likely avoid cloning by instead making RegisterOrMemory contain an exclusive
+        //        reference to the register or memory.
+        self.operands
+            .get(index)
+            .unwrap()
+            .clone()
+            .try_into()
+            .unwrap()
+    }
+
+    // ------------------------------------------------------------------------
+    //
+    // let (op1: Register, op2: RegisterOrMemory) = i.unwrap_operands().into();
+    // ------------------------------------------------------------------------
+    // let mut register: Register;
+    // let mut regmem: RegisterOrMemory;
+    // let mut immediate: Immediate;
+    // unwrap_operands!(i, register, regmem)
+    // unwrap_operands!(i, register)
+    // unwrap_operands!(i, regmem, register, immediate)
+    // ------------------------------------------------------------------------
+    // pub(crate) fn unwrap_into() {
+    // todo!()
+    // }
 }
 
 impl<'a> TryFrom<&NasmStr<'a>> for Instruction {
