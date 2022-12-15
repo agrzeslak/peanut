@@ -108,7 +108,7 @@ impl InstructionOperandFormat {
     pub fn matches(&self, operands: &Vec<Operand>) -> bool {
         // Validates that the operand is the correct immediate value.
         let validate_const = |operand: &Operand, target: i64| -> bool {
-            if let OperandType::Immediate(immediate) = operand.operand_type() {
+            if let OperandType::Immediate(immediate) = &operand.operand_type {
                 immediate.parsed() == target
             } else {
                 false
@@ -119,11 +119,11 @@ impl InstructionOperandFormat {
         // size. If no size directive is provided, then it is validates that the inferred size of
         // the immediate value is smaller than, or equal to the target size.
         let validate_immediate = |operand: &Operand, target_size: Size| -> bool {
-            let OperandType::Immediate(immediate) = operand.operand_type() else {
+            let OperandType::Immediate(immediate) = &operand.operand_type else {
                     return false;
                 };
 
-            if let Some(size_directive) = operand.size_directive() {
+            if let Some(size_directive) = &operand.size_directive {
                 return size_directive == &target_size;
             }
 
@@ -133,7 +133,7 @@ impl InstructionOperandFormat {
         // Validates that the register contained within this operand is of the specified
         // `target_size`.
         let validate_register = |operand: &Operand, target_size: Size| -> bool {
-            let OperandType::Register(register) = operand.operand_type() else {
+            let OperandType::Register(register) = &operand.operand_type else {
                 return false;
             };
             register.size() == target_size
@@ -142,7 +142,7 @@ impl InstructionOperandFormat {
         // Validates that the operand containing this effective address either does not have a size
         // directive, or that it has a matching size directive.
         let validate_memory = |operand: &Operand, target_size: Size| -> bool {
-            if let Some(size_directive) = operand.size_directive() {
+            if let Some(size_directive) = &operand.size_directive {
                 return size_directive == &target_size;
             }
             true
@@ -151,7 +151,7 @@ impl InstructionOperandFormat {
         // Validates that either a register or effective address has been provided. If it is a
         // register, it should also be of the specified `target_size`.
         let validate_register_or_memory = |operand: &Operand, target_size: Size| -> bool {
-            match operand.operand_type() {
+            match &operand.operand_type {
                 OperandType::Memory(_) => true,
                 OperandType::Register(register) => register.size() == target_size,
                 _ => false,
@@ -161,22 +161,22 @@ impl InstructionOperandFormat {
         use InstructionOperandFormat as F;
         match (self, operands.get(0), operands.get(1), operands.get(2)) {
             (F::Cs, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register16::Cs.into())
+                op.operand_type == OperandType::Register(Register16::Cs.into())
             }
             (F::Ds, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register16::Ds.into())
+                op.operand_type == OperandType::Register(Register16::Ds.into())
             }
             (F::Es, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register16::Es.into())
+                op.operand_type == OperandType::Register(Register16::Es.into())
             }
             (F::Fs, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register16::Fs.into())
+                op.operand_type == OperandType::Register(Register16::Fs.into())
             }
             (F::Gs, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register16::Gs.into())
+                op.operand_type == OperandType::Register(Register16::Gs.into())
             }
             (F::Ss, Some(op), None, None) => {
-                op.operand_type() == &OperandType::Register(Register16::Ss.into())
+                op.operand_type == OperandType::Register(Register16::Ss.into())
             }
             (F::Const3, Some(op), None, None) => validate_const(op, 3),
             (F::Imm8, Some(op), None, None) => validate_immediate(op, Size::Byte),
@@ -276,18 +276,15 @@ impl InstructionOperandFormat {
             // (F::Far32, Some(op), None, None) => {},
             (F::Rm8Cl, Some(op1), Some(op2), None) => {
                 validate_register_or_memory(op1, Size::Byte)
-                    && op2.operand_type()
-                        == &OperandType::Register(Register8::Cl.into())
+                    && op2.operand_type == OperandType::Register(Register8::Cl.into())
             }
             (F::Rm16Cl, Some(op1), Some(op2), None) => {
                 validate_register_or_memory(op1, Size::Word)
-                    && op2.operand_type()
-                        == &OperandType::Register(Register8::Cl.into())
+                    && op2.operand_type == OperandType::Register(Register8::Cl.into())
             }
             (F::Rm32Cl, Some(op1), Some(op2), None) => {
                 validate_register_or_memory(op1, Size::Dword)
-                    && op2.operand_type()
-                        == &OperandType::Register(Register8::Cl.into())
+                    && op2.operand_type == OperandType::Register(Register8::Cl.into())
             }
             // (F::Reg32Cr, Some(op1), Some(op2), None) => {},
             // (F::Reg32Dr, Some(op1), Some(op2), None) => {},
@@ -315,25 +312,23 @@ impl InstructionOperandFormat {
             (F::Rm16Reg16Cl, Some(op1), Some(op2), Some(op3)) => {
                 validate_register_or_memory(op1, Size::Word)
                     && validate_register(op2, Size::Word)
-                    && op3.operand_type()
-                        == &OperandType::Register(Register8::Cl.into())
+                    && op3.operand_type == OperandType::Register(Register8::Cl.into())
             }
             (F::Rm32Reg32Cl, Some(op1), Some(op2), Some(op3)) => {
                 validate_register_or_memory(op1, Size::Dword)
                     && validate_register(op2, Size::Dword)
-                    && op3.operand_type()
-                        == &OperandType::Register(Register8::Cl.into())
+                    && op3.operand_type == OperandType::Register(Register8::Cl.into())
             }
             (F::AlImm8, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register8::Al.into())
+                op1.operand_type == OperandType::Register(Register8::Al.into())
                     && validate_immediate(op2, Size::Byte)
             }
             (F::AxImm16, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register16::Ax.into())
+                op1.operand_type == OperandType::Register(Register16::Ax.into())
                     && validate_immediate(op2, Size::Word)
             }
             (F::EaxImm32, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register32::Eax.into())
+                op1.operand_type == OperandType::Register(Register32::Eax.into())
                     && validate_immediate(op2, Size::Dword)
             }
             (F::Imm16Imm16, Some(op1), Some(op2), None) => {
@@ -343,19 +338,19 @@ impl InstructionOperandFormat {
                 validate_immediate(op1, Size::Word) && validate_immediate(op2, Size::Dword)
             }
             (F::AxReg16, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register16::Ax.into())
+                op1.operand_type == OperandType::Register(Register16::Ax.into())
                     && validate_register(op2, Size::Word)
             }
             (F::EaxReg32, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register32::Eax.into())
+                op1.operand_type == OperandType::Register(Register32::Eax.into())
                     && validate_register(op2, Size::Dword)
             }
             (F::AxImm8, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register16::Ax.into())
+                op1.operand_type == OperandType::Register(Register16::Ax.into())
                     && validate_immediate(op2, Size::Byte)
             }
             (F::EaxImm8, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register32::Eax.into())
+                op1.operand_type == OperandType::Register(Register32::Eax.into())
                     && validate_immediate(op2, Size::Byte)
             }
             // (F::AlMoffs8, Some(op1), Some(op2), None) => {},
@@ -365,57 +360,47 @@ impl InstructionOperandFormat {
             // (F::Moffs16Ax, Some(op1), Some(op2), None) => {},
             // (F::Moffs32Eax, Some(op1), Some(op2), None) => {},
             (F::AlDx, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register8::Al.into())
-                    && op2.operand_type()
-                        == &OperandType::Register(Register16::Dx.into())
+                op1.operand_type == OperandType::Register(Register8::Al.into())
+                    && op2.operand_type == OperandType::Register(Register16::Dx.into())
             }
             (F::AxDx, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register16::Ax.into())
-                    && op2.operand_type()
-                        == &OperandType::Register(Register16::Dx.into())
+                op1.operand_type == OperandType::Register(Register16::Ax.into())
+                    && op2.operand_type == OperandType::Register(Register16::Dx.into())
             }
             (F::EaxDx, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register32::Eax.into())
-                    && op2.operand_type()
-                        == &OperandType::Register(Register16::Dx.into())
+                op1.operand_type == OperandType::Register(Register32::Eax.into())
+                    && op2.operand_type == OperandType::Register(Register16::Dx.into())
             }
             (F::DxAl, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register16::Dx.into())
-                    && op2.operand_type()
-                        == &OperandType::Register(Register8::Al.into())
+                op1.operand_type == OperandType::Register(Register16::Dx.into())
+                    && op2.operand_type == OperandType::Register(Register8::Al.into())
             }
             (F::DxAx, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register16::Dx.into())
-                    && op2.operand_type()
-                        == &OperandType::Register(Register16::Ax.into())
+                op1.operand_type == OperandType::Register(Register16::Dx.into())
+                    && op2.operand_type == OperandType::Register(Register16::Ax.into())
             }
             (F::DxEax, Some(op1), Some(op2), None) => {
-                op1.operand_type() == &OperandType::Register(Register16::Dx.into())
-                    && op2.operand_type()
-                        == &OperandType::Register(Register32::Eax.into())
+                op1.operand_type == OperandType::Register(Register16::Dx.into())
+                    && op2.operand_type == OperandType::Register(Register32::Eax.into())
             }
             (F::Imm8Al, Some(op1), Some(op2), None) => {
                 validate_immediate(op1, Size::Byte)
-                    && op2.operand_type()
-                        == &OperandType::Register(Register8::Al.into())
+                    && op2.operand_type == OperandType::Register(Register8::Al.into())
             }
             (F::Imm8Ax, Some(op1), Some(op2), None) => {
                 validate_immediate(op1, Size::Byte)
-                    && op2.operand_type()
-                        == &OperandType::Register(Register16::Ax.into())
+                    && op2.operand_type == OperandType::Register(Register16::Ax.into())
             }
             (F::Imm8Eax, Some(op1), Some(op2), None) => {
                 validate_immediate(op1, Size::Byte)
-                    && op2.operand_type()
-                        == &OperandType::Register(Register32::Eax.into())
+                    && op2.operand_type == OperandType::Register(Register32::Eax.into())
             }
             (F::Imm8Imm16, Some(op1), Some(op2), None) => {
                 validate_immediate(op1, Size::Byte) && validate_immediate(op2, Size::Word)
             }
             (F::Reg8Cl, Some(op1), Some(op2), None) => {
                 validate_register(op1, Size::Byte)
-                    && op2.operand_type()
-                        == &OperandType::Register(Register8::Cl.into())
+                    && op2.operand_type == OperandType::Register(Register8::Cl.into())
             }
             _ => false,
         }
@@ -1342,8 +1327,8 @@ impl TryFrom<&NasmStr<'_>> for Size {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Operand {
-    operand_type: OperandType,
-    size_directive: Option<Size>,
+    pub(crate) operand_type: OperandType,
+    pub(crate) size_directive: Option<Size>,
 }
 
 impl Operand {
@@ -1352,14 +1337,6 @@ impl Operand {
             operand_type,
             size_directive,
         }
-    }
-
-    pub fn operand_type(&self) -> &OperandType {
-        &self.operand_type
-    }
-
-    pub fn size_directive(&self) -> &Option<Size> {
-        &self.size_directive
     }
 }
 
@@ -1419,7 +1396,7 @@ impl Instruction {
         self.operands
             .get(index)
             .unwrap()
-            .operand_type()
+            .operand_type
             .unwrap_immediate()
     }
 
@@ -1428,7 +1405,7 @@ impl Instruction {
         self.operands
             .get(index)
             .unwrap()
-            .operand_type()
+            .operand_type
             .unwrap_effective_address()
     }
 
@@ -1437,7 +1414,7 @@ impl Instruction {
         self.operands
             .get(index)
             .unwrap()
-            .operand_type()
+            .operand_type
             .unwrap_register()
     }
 }
