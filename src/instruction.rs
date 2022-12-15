@@ -1471,6 +1471,50 @@ impl<'a> TryFrom<&NasmStr<'a>> for Instruction {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum RegisterOrMemory {
+    Register(Register),
+    Memory(EffectiveAddress),
+}
+
+impl RegisterOrMemory {
+    pub fn read8(&self, cpu: &Cpu) -> u8 {
+        match self {
+            RegisterOrMemory::Register(register) => {
+                let Register::Register8(register) = register else {
+                    panic!("attempted to read 8 bits from {register}");
+                };
+                cpu.registers.read8(register)
+            }
+            RegisterOrMemory::Memory(effective_address) => todo!(),
+        }
+    }
+
+    pub fn write8(&self, cpu: &mut Cpu, value: u8) {
+        match self {
+            RegisterOrMemory::Register(register) => {
+                let Register::Register8(register) = register else {
+                    panic!("attempted to write 8 bits to {register}");
+                };
+                cpu.registers.write8(register, value);
+            }
+            RegisterOrMemory::Memory(effective_address) => todo!(),
+        }
+    }
+}
+
+impl From<Register> for RegisterOrMemory {
+    fn from(register: Register) -> Self {
+        Self::Register(register)
+    }
+}
+
+impl From<EffectiveAddress> for RegisterOrMemory {
+    fn from(effective_address: EffectiveAddress) -> Self {
+        Self::Memory(effective_address)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

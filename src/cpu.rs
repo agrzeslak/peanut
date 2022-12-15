@@ -4,7 +4,7 @@ use crate::{instruction::{Instruction, OperandType}, register::Registers, traits
 
 #[derive(Default)]
 pub struct Cpu {
-    registers: Registers,
+    pub(crate) registers: Registers,
 }
 
 impl Cpu {
@@ -37,14 +37,14 @@ impl Cpu {
     }
     pub(crate) fn adc_reg8_rm8(&mut self, instruction: &Instruction) {
         let destination = instruction.unwrap_register_operand(0);
-        let destination_value = self.registers.get8(&destination.try_into().unwrap());
+        let destination_value = self.registers.read8(&destination.try_into().unwrap());
         let source_value = match &instruction.operands[1].operand_type() {
             OperandType::Immediate(_) => unreachable!(),
             OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
-            OperandType::Register(register) => self.registers.get8(&register.try_into().unwrap()),
+            OperandType::Register(register) => self.registers.read8(&register.try_into().unwrap()),
         };
         let result = self.add_with_carry(destination_value, source_value);
-        self.registers.set8(&destination.try_into().unwrap(), result);
+        self.registers.write8(&destination.try_into().unwrap(), result);
     }
     pub(crate) fn adc_reg16_rm16(&mut self, instruction: &Instruction) {
         let destination = instruction.unwrap_register_operand(0);
@@ -107,14 +107,14 @@ impl Cpu {
     }
     pub(crate) fn add_reg8_rm8(&mut self, instruction: &Instruction) {
         let destination = instruction.unwrap_register_operand(0);
-        let destination_value = self.registers.get8(&destination.try_into().unwrap());
+        let destination_value = self.registers.read8(&destination.try_into().unwrap());
         let source_value = match &instruction.operands[1].operand_type() {
             OperandType::Immediate(_) => unreachable!(),
             OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
-            OperandType::Register(register) => self.registers.get8(&register.try_into().unwrap()),
+            OperandType::Register(register) => self.registers.read8(&register.try_into().unwrap()),
         };
         let result = self.add(destination_value, source_value);
-        self.registers.set8(&destination.try_into().unwrap(), result);
+        self.registers.write8(&destination.try_into().unwrap(), result);
     }
     pub(crate) fn add_reg16_rm16(&mut self, instruction: &Instruction) {
         let destination = instruction.unwrap_register_operand(0);

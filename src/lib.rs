@@ -1,5 +1,6 @@
 mod arguments;
 mod cpu;
+mod emulator;
 mod error;
 mod instruction;
 mod memory;

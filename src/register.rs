@@ -724,7 +724,7 @@ impl Registers {
         }
     }
 
-    pub fn get8(&self, register: &Register8) -> u8 {
+    pub fn read8(&self, register: &Register8) -> u8 {
         use Register8::*;
         match register {
             Ah => self.get_ah(),
@@ -738,7 +738,7 @@ impl Registers {
         }
     }
 
-    pub fn set8(&mut self, register: &Register8, value: u8) {
+    pub fn write8(&mut self, register: &Register8, value: u8) {
         use Register8::*;
         match register {
             Ah => self.set_ah(value),
