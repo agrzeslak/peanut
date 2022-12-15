@@ -1492,6 +1492,20 @@ impl From<EffectiveAddress> for RegisterOrMemory {
     }
 }
 
+impl TryFrom<Operand> for RegisterOrMemory {
+    type Error = Error;
+
+    fn try_from(operand: Operand) -> Result<Self, Self::Error> {
+        match operand.operand_type {
+            OperandType::Immediate(_) => Err(Error::InvalidOperandType(
+                "an immediate value cannot be converted into a RegisterOrMemory".into(),
+            )),
+            OperandType::Memory(memory) => Ok(Self::Memory(memory)),
+            OperandType::Register(register) => Ok(Self::Register(register)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

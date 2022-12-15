@@ -9,6 +9,8 @@ pub enum Error {
     CannotCovertType(String),
     #[error("instruction could not be parsed: {0}")]
     CannotParseInstruction(String),
+    #[error("invalid operand type: {0}")]
+    InvalidOperandType(String),
     #[error("no matching instruction could be found: {0}")]
     NoMatchingInstruction(String),
 }
