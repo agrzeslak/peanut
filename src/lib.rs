@@ -1,8 +1,8 @@
 mod arguments;
 mod cpu;
-mod emulator;
 mod error;
 mod instruction;
+mod machine;
 mod memory;
 mod modrm;
 mod register;

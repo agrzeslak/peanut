@@ -1,6 +1,6 @@
 use crate::{cpu::Cpu, memory::Ram};
 
-pub struct Emulator {
+pub struct Machine {
     cpu: Cpu,
     ram: Ram,
 }
