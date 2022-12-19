@@ -1140,6 +1140,8 @@ impl TryFrom<OperandType> for EffectiveAddress {
     }
 }
 
+// FIXME: Should likely have Immediate8/16/32 variants in order to enforce sizes when executing
+//        instructions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Immediate {
     raw: String,

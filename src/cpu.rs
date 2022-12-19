@@ -140,54 +140,67 @@ impl Cpu {
     }
 
     pub(crate) fn add_rm8_imm8(&mut self, instruction: &Instruction) {
+        let (rm8, imm8) = unwrap_operands!(instruction, RegisterOrMemory8, &Immediate);
         todo!()
     }
 
     pub(crate) fn add_rm8_reg8(&mut self, instruction: &Instruction) {
+        let (rm8, reg8) = unwrap_operands!(instruction, RegisterOrMemory8, &Register8);
         todo!()
     }
 
     pub(crate) fn add_rm16_reg16(&mut self, instruction: &Instruction) {
+        let (rm16, reg16) = unwrap_operands!(instruction, RegisterOrMemory16, &Register16);
         todo!()
     }
 
     pub(crate) fn add_rm32_reg32(&mut self, instruction: &Instruction) {
+        let (rm32, reg32) = unwrap_operands!(instruction, RegisterOrMemory32, &Register32);
         todo!()
     }
 
     pub(crate) fn and_al_imm8(&mut self, instruction: &Instruction) {
+        let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
         todo!()
     }
 
     pub(crate) fn and_ax_imm16(&mut self, instruction: &Instruction) {
+        let (_ax, imm16) = unwrap_operands!(instruction, &Register16, &Immediate);
         todo!()
     }
 
     pub(crate) fn and_eax_imm32(&mut self, instruction: &Instruction) {
+        let (_eax, imm32) = unwrap_operands!(instruction, &Register32, &Immediate);
         todo!()
     }
 
     pub(crate) fn and_reg8_rm8(&mut self, instruction: &Instruction) {
+        let (reg8, rm8) = unwrap_operands!(instruction, &Register8, RegisterOrMemory8);
         todo!()
     }
 
     pub(crate) fn and_reg16_rm16(&mut self, instruction: &Instruction) {
+        let (reg16, rm16) = unwrap_operands!(instruction, &Register16, RegisterOrMemory16);
         todo!()
     }
 
     pub(crate) fn and_reg32_rm32(&mut self, instruction: &Instruction) {
+        let (reg32, rm32) = unwrap_operands!(instruction, &Register32, RegisterOrMemory32);
         todo!()
     }
 
     pub(crate) fn and_rm8_reg8(&mut self, instruction: &Instruction) {
+        let (rm8, reg8) = unwrap_operands!(instruction, RegisterOrMemory8, &Register8);
         todo!()
     }
 
     pub(crate) fn and_rm16_reg16(&mut self, instruction: &Instruction) {
+        let (rm16, reg16) = unwrap_operands!(instruction, RegisterOrMemory16, &Register16);
         todo!()
     }
 
     pub(crate) fn and_rm32_reg32(&mut self, instruction: &Instruction) {
+        let (rm32, reg32) = unwrap_operands!(instruction, RegisterOrMemory32, &Register32);
         todo!()
     }
 
@@ -200,138 +213,172 @@ impl Cpu {
     }
 
     pub(crate) fn or_al_imm8(&mut self, instruction: &Instruction) {
+        let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
         todo!()
     }
 
     pub(crate) fn or_ax_imm16(&mut self, instruction: &Instruction) {
+        let (_ax, imm16) = unwrap_operands!(instruction, &Register16, &Immediate);
         todo!()
     }
 
     pub(crate) fn or_eax_imm32(&mut self, instruction: &Instruction) {
+        let (_eax, imm32) = unwrap_operands!(instruction, &Register32, &Immediate);
         todo!()
     }
 
     pub(crate) fn or_reg8_rm8(&mut self, instruction: &Instruction) {
+        let (reg8, rm8) = unwrap_operands!(instruction, &Register8, RegisterOrMemory8);
         todo!()
     }
 
     pub(crate) fn or_reg16_rm16(&mut self, instruction: &Instruction) {
+        let (reg16, rm16) = unwrap_operands!(instruction, &Register16, RegisterOrMemory16);
         todo!()
     }
 
     pub(crate) fn or_reg32_rm32(&mut self, instruction: &Instruction) {
+        let (reg32, rm32) = unwrap_operands!(instruction, &Register32, RegisterOrMemory32);
         todo!()
     }
 
     pub(crate) fn or_rm8_reg8(&mut self, instruction: &Instruction) {
+        let (rm8, reg8) = unwrap_operands!(instruction, RegisterOrMemory8, &Register8);
         todo!()
     }
 
     pub(crate) fn or_rm16_reg16(&mut self, instruction: &Instruction) {
+        let (rm16, reg16) = unwrap_operands!(instruction, RegisterOrMemory16, &Register16);
         todo!()
     }
 
     pub(crate) fn or_rm32_reg32(&mut self, instruction: &Instruction) {
+        let (rm32, reg32) = unwrap_operands!(instruction, RegisterOrMemory32, &Register32);
         todo!()
     }
 
     pub(crate) fn pop_ds(&mut self, instruction: &Instruction) {
+        let _ds = unwrap_operands!(instruction, &Register16);
         todo!()
     }
 
     pub(crate) fn pop_es(&mut self, instruction: &Instruction) {
+        let _es = unwrap_operands!(instruction, &Register16);
         todo!()
     }
 
     pub(crate) fn pop_ss(&mut self, instruction: &Instruction) {
+        let _ss = unwrap_operands!(instruction, &Register16);
         todo!()
     }
 
     pub(crate) fn push_cs(&mut self, instruction: &Instruction) {
+        let _cs = unwrap_operands!(instruction, &Register16);
         todo!()
     }
 
     pub(crate) fn push_ds(&mut self, instruction: &Instruction) {
+        let _ds = unwrap_operands!(instruction, &Register16);
         todo!()
     }
 
     pub(crate) fn push_es(&mut self, instruction: &Instruction) {
+        let _es = unwrap_operands!(instruction, &Register16);
         todo!()
     }
 
     pub(crate) fn push_ss(&mut self, instruction: &Instruction) {
+        let _ss = unwrap_operands!(instruction, &Register16);
         todo!()
     }
 
     pub(crate) fn sbb_al_imm8(&mut self, instruction: &Instruction) {
+        let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
         todo!()
     }
 
     pub(crate) fn sbb_ax_imm16(&mut self, instruction: &Instruction) {
+        let (_ax, imm16) = unwrap_operands!(instruction, &Register16, &Immediate);
         todo!()
     }
 
     pub(crate) fn sbb_eax_imm32(&mut self, instruction: &Instruction) {
+        let (_eax, imm32) = unwrap_operands!(instruction, &Register32, &Immediate);
         todo!()
     }
 
     pub(crate) fn sbb_reg8_rm8(&mut self, instruction: &Instruction) {
+        let (reg8, rm8) = unwrap_operands!(instruction, &Register8, RegisterOrMemory8);
         todo!()
     }
 
     pub(crate) fn sbb_reg16_rm16(&mut self, instruction: &Instruction) {
+        let (reg16, rm16) = unwrap_operands!(instruction, &Register16, RegisterOrMemory16);
         todo!()
     }
 
     pub(crate) fn sbb_reg32_rm32(&mut self, instruction: &Instruction) {
+        let (reg32, rm32) = unwrap_operands!(instruction, &Register32, RegisterOrMemory32);
         todo!()
     }
 
     pub(crate) fn sbb_rm8_reg8(&mut self, instruction: &Instruction) {
+        let (rm8, reg8) = unwrap_operands!(instruction, RegisterOrMemory8, &Register8);
         todo!()
     }
 
     pub(crate) fn sbb_rm16_reg16(&mut self, instruction: &Instruction) {
+        let (rm16, reg16) = unwrap_operands!(instruction, RegisterOrMemory16, &Register16);
         todo!()
     }
 
     pub(crate) fn sbb_rm32_reg32(&mut self, instruction: &Instruction) {
+        let (rm32, reg32) = unwrap_operands!(instruction, RegisterOrMemory32, &Register32);
         todo!()
     }
 
     pub(crate) fn sub_al_imm8(&mut self, instruction: &Instruction) {
+        let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
         todo!()
     }
 
     pub(crate) fn sub_ax_imm16(&mut self, instruction: &Instruction) {
+        let (_ax, imm16) = unwrap_operands!(instruction, &Register16, &Immediate);
         todo!()
     }
 
     pub(crate) fn sub_eax_imm32(&mut self, instruction: &Instruction) {
+        let (_eax, imm32) = unwrap_operands!(instruction, &Register32, &Immediate);
         todo!()
     }
 
     pub(crate) fn sub_reg8_rm8(&mut self, instruction: &Instruction) {
+        let (reg8, rm8) = unwrap_operands!(instruction, &Register8, RegisterOrMemory8);
         todo!()
     }
 
     pub(crate) fn sub_reg16_rm16(&mut self, instruction: &Instruction) {
+        let (reg16, rm16) = unwrap_operands!(instruction, &Register16, RegisterOrMemory16);
         todo!()
     }
 
     pub(crate) fn sub_reg32_rm32(&mut self, instruction: &Instruction) {
+        let (reg32, rm32) = unwrap_operands!(instruction, &Register32, RegisterOrMemory32);
         todo!()
     }
 
     pub(crate) fn sub_rm8_reg8(&mut self, instruction: &Instruction) {
+        let (rm8, reg8) = unwrap_operands!(instruction, RegisterOrMemory8, &Register8);
         todo!()
     }
 
     pub(crate) fn sub_rm16_reg16(&mut self, instruction: &Instruction) {
+        let (rm16, reg16) = unwrap_operands!(instruction, RegisterOrMemory16, &Register16);
         todo!()
     }
 
     pub(crate) fn sub_rm32_reg32(&mut self, instruction: &Instruction) {
+        let (rm32, reg32) = unwrap_operands!(instruction, RegisterOrMemory32, &Register32);
         todo!()
     }
 }
