@@ -1,7 +1,7 @@
 use crate::{
     cpu::Cpu,
     error::Error,
-    register::{Register, Register16, Register32, Register8},
+    register::{Register, Register8, Register16, Register32},
 };
 
 #[derive(Debug)]
