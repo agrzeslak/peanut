@@ -5,7 +5,8 @@ use paste::paste;
 
 use crate::{
     error::Error,
-    instruction::{NasmStr, Size}, traits::LeastSignificantByte,
+    instruction::{NasmStr, OperandType, Size},
+    traits::LeastSignificantByte,
 };
 
 trait HighLowBytes32 {
@@ -102,7 +103,7 @@ pub enum CurrentPrivilegeLevel {
 /// Indicates the I/O privilege level of the currently running program or task. The current
 /// privilege level (CPL) of the currently running program or task must be less than or equal
 /// to the I/O privilege level to access the I/O address space. The POPF and IRET instructions
-/// can modify this field only when operating at a CPL of 0.
+/// can modify this field only when operatina at a CPL of 0.
 ///
 /// NT (Nested Task Flag), bit 14, system flag.
 /// Controls the chaining of interrupted and called tasks. Set when the current task is linked
@@ -147,7 +148,7 @@ macro_rules! eflags_accessors {
             }
 
             pub fn [<set_ $field_name>](&mut self, value: bool) {
-                self.0.set($bit, true);
+                self.0.set($bit, value);
             }
         }
     };
@@ -255,6 +256,20 @@ impl TryFrom<Register> for Register32 {
     }
 }
 
+impl<'a> TryFrom<&'a Register> for &'a Register32 {
+    type Error = Error;
+
+    fn try_from(register: &'a Register) -> Result<Self, Self::Error> {
+        match register {
+            Register::Register32(register) => Ok(register),
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a general purpose (32-bit) register",
+                register
+            ))),
+        }
+    }
+}
+
 impl TryFrom<&NasmStr<'_>> for Register32 {
     type Error = Error;
 
@@ -274,6 +289,14 @@ impl TryFrom<&NasmStr<'_>> for Register32 {
                 value.0
             ))),
         }
+    }
+}
+
+impl<'a> TryFrom<&'a OperandType> for &'a Register32 {
+    type Error = Error;
+
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
+        <&Register>::try_from(operand_type)?.try_into()
     }
 }
 
@@ -333,6 +356,20 @@ impl TryFrom<Register> for Register16 {
     }
 }
 
+impl<'a> TryFrom<&'a Register> for &'a Register16 {
+    type Error = Error;
+
+    fn try_from(register: &'a Register) -> Result<Self, Self::Error> {
+        match register {
+            Register::Register16(register) => Ok(register),
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a 16-bit register",
+                register
+            ))),
+        }
+    }
+}
+
 impl TryFrom<&NasmStr<'_>> for Register16 {
     type Error = Error;
 
@@ -358,6 +395,14 @@ impl TryFrom<&NasmStr<'_>> for Register16 {
                 value.0
             ))),
         }
+    }
+}
+
+impl<'a> TryFrom<&'a OperandType> for &'a Register16 {
+    type Error = Error;
+
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
+        <&Register>::try_from(operand_type)?.try_into()
     }
 }
 
@@ -405,6 +450,28 @@ impl TryFrom<Register> for Register8 {
     }
 }
 
+impl<'a> TryFrom<&'a Register> for &'a Register8 {
+    type Error = Error;
+
+    fn try_from(register: &'a Register) -> Result<Self, Self::Error> {
+        match register {
+            Register::Register8(register) => Ok(register),
+            _ => Err(Error::CannotCovertType(format!(
+                "{} is not a 8-bit register",
+                register
+            ))),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a OperandType> for &'a Register8 {
+    type Error = Error;
+
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
+        <&Register>::try_from(operand_type)?.try_into()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Register {
     Register32(Register32),
@@ -419,7 +486,7 @@ impl Register {
         match self {
             Register32(_) => Dword,
             Register16(_) => Word,
-            Register8(_) => Byte
+            Register8(_) => Byte,
         }
     }
 }
@@ -501,6 +568,22 @@ impl TryFrom<&NasmStr<'_>> for Register {
                 "{} is not a valid register",
                 value.0
             ))),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a OperandType> for &'a Register {
+    type Error = Error;
+
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
+        match operand_type {
+            OperandType::Immediate(_) => Err(Error::CannotCovertType(
+                "an immediate was provided when a register was expected".into(),
+            )),
+            OperandType::Memory(_) => Err(Error::CannotCovertType(
+                "a memory reference was provided when a register was expected".into(),
+            )),
+            OperandType::Register(register) => Ok(register),
         }
     }
 }
@@ -606,7 +689,7 @@ impl Registers {
         self.esp.set_low_16(value);
     }
 
-    pub fn get32(&self, register: &Register32) -> u32 {
+    pub fn read32(&self, register: &Register32) -> u32 {
         use Register32::*;
         match register {
             Eax => self.get_eax(),
@@ -620,7 +703,7 @@ impl Registers {
         }
     }
 
-    pub fn set32(&mut self, register: &Register32, value: u32) {
+    pub fn write32(&mut self, register: &Register32, value: u32) {
         use Register32::*;
         match register {
             Eax => self.set_eax(value),
@@ -634,7 +717,7 @@ impl Registers {
         }
     }
 
-    pub fn get16(&self, register: &Register16) -> u16 {
+    pub fn read16(&self, register: &Register16) -> u16 {
         use Register16::*;
         match register {
             Ax => self.get_ax(),
@@ -654,7 +737,7 @@ impl Registers {
         }
     }
 
-    pub fn set16(&mut self, register: &Register16, value: u16) {
+    pub fn write16(&mut self, register: &Register16, value: u16) {
         use Register16::*;
         match register {
             Ax => self.set_ax(value),

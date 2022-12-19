@@ -1124,6 +1124,22 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
     }
 }
 
+impl TryFrom<OperandType> for EffectiveAddress {
+    type Error = Error;
+
+    fn try_from(operand_type: OperandType) -> Result<Self, Self::Error> {
+        match operand_type {
+            OperandType::Immediate(_) => Err(Error::CannotCovertType(
+                "an immediate was provided when a memory reference was expected".into(),
+            )),
+            OperandType::Memory(effective_address) => Ok(effective_address),
+            OperandType::Register(_) => Err(Error::CannotCovertType(
+                "a register was provided when a memory reference was expected".into(),
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Immediate {
     raw: String,
@@ -1246,6 +1262,22 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
     }
 }
 
+impl<'a> TryFrom<&'a OperandType> for &'a Immediate {
+    type Error = Error;
+
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
+        match operand_type {
+            OperandType::Immediate(immediate) => Ok(immediate),
+            OperandType::Memory(_) => Err(Error::CannotCovertType(
+                "a memory reference was provided when an immediate value was expected".into(),
+            )),
+            OperandType::Register(_) => Err(Error::CannotCovertType(
+                "a register was provided when an immediate value was expected".into(),
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OperandType {
     Immediate(Immediate),
@@ -1254,21 +1286,21 @@ pub enum OperandType {
 }
 
 impl OperandType {
-    pub fn unwrap_immediate(self) -> Immediate {
+    pub fn unwrap_immediate(&self) -> &Immediate {
         let Self::Immediate(immediate) = self else {
             panic!("attempted to unwrap a non-immediate variant as an immediate");
         };
         immediate
     }
 
-    pub fn unwrap_effective_address(self) -> EffectiveAddress {
+    pub fn unwrap_effective_address(&self) -> &EffectiveAddress {
         let Self::Memory(effective_address) = self else {
             panic!("attempted to unwrap a non-effective address variant as an effective address");
         };
         effective_address
     }
 
-    pub fn unwrap_register(self) -> Register {
+    pub fn unwrap_register(&self) -> &Register {
         let Self::Register(register) = self else {
             panic!("attempted to unwrap a non-register variant as an register");
         };
@@ -1392,8 +1424,9 @@ pub struct Instruction {
 
 impl Instruction {
     /// Unwrap the operand at the given index as an `Immediate`, otherwise panic.
-    pub(crate) fn unwrap_immediate_operand(&self, index: usize) -> Immediate {
-        self.operands
+    pub(crate) fn unwrap_immediate(&self, index: usize) -> &Immediate {
+        &self
+            .operands
             .get(index)
             .unwrap()
             .operand_type
@@ -1401,8 +1434,9 @@ impl Instruction {
     }
 
     /// Unwrap the operand at the given index as an `EffectiveAddress`, otherwise panic.
-    pub(crate) fn unwrap_effective_address_operand(&self, index: usize) -> EffectiveAddress {
-        self.operands
+    pub(crate) fn unwrap_effective_address(&self, index: usize) -> &EffectiveAddress {
+        &self
+            .operands
             .get(index)
             .unwrap()
             .operand_type
@@ -1410,40 +1444,43 @@ impl Instruction {
     }
 
     /// Unwrap the operand at the given index as a `Register`, otherwise panic.
-    pub(crate) fn unwrap_register_operand(&self, index: usize) -> Register {
-        self.operands
+    pub(crate) fn unwrap_register(&self, index: usize) -> &Register {
+        &self
+            .operands
             .get(index)
             .unwrap()
             .operand_type
             .unwrap_register()
     }
-
-    pub(crate) fn unwrap_register_or_memory(&self, index: usize) -> RegisterOrMemory {
-        // FIXME: can likely avoid cloning by instead making RegisterOrMemory contain an exclusive
-        //        reference to the register or memory.
-        self.operands
-            .get(index)
-            .unwrap()
-            .clone()
-            .try_into()
-            .unwrap()
-    }
-
-    // ------------------------------------------------------------------------
-    //
-    // let (op1: Register, op2: RegisterOrMemory) = i.unwrap_operands().into();
-    // ------------------------------------------------------------------------
-    // let mut register: Register;
-    // let mut regmem: RegisterOrMemory;
-    // let mut immediate: Immediate;
-    // unwrap_operands!(i, register, regmem)
-    // unwrap_operands!(i, register)
-    // unwrap_operands!(i, regmem, register, immediate)
-    // ------------------------------------------------------------------------
-    // pub(crate) fn unwrap_into() {
-    // todo!()
-    // }
 }
+
+macro_rules! unwrap_operands {
+    ($instruction:ident, $type1:ty) => {
+        <$type1>::try_from($instruction.operands[0].operand_type).unwrap()
+    };
+    ($instruction:ident, $type1:ty, $type2:ty) => {
+        (
+            <$type1>::try_from(&$instruction.operands[0].operand_type).unwrap(),
+            <$type2>::try_from(&$instruction.operands[1].operand_type).unwrap(),
+        )
+    };
+    ($instruction:ident, $type1:ty, $type2:ty, $type3:ty) => {
+        (
+            <$type1>::try_from($instruction.operands[0].operand_type).unwrap(),
+            <$type2>::try_from($instruction.operands[1].operand_type).unwrap(),
+            <$type3>::try_from($instruction.operands[2].operand_type).unwrap(),
+        )
+    };
+    ($instruction:ident, $type1:ty, $type2:ty, $type3:ty, $type4:ty) => {
+        (
+            <$type1>::try_from($instruction.operands[0].operand_type).unwrap(),
+            <$type2>::try_from($instruction.operands[1].operand_type).unwrap(),
+            <$type3>::try_from($instruction.operands[2].operand_type).unwrap(),
+            <$type4>::try_from($instruction.operands[3].operand_type).unwrap(),
+        )
+    };
+}
+pub(crate) use unwrap_operands;
 
 impl<'a> TryFrom<&NasmStr<'a>> for Instruction {
     type Error = Error;
@@ -1475,59 +1512,151 @@ impl<'a> TryFrom<&NasmStr<'a>> for Instruction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RegisterOrMemory {
-    Register(Register),
-    Memory(EffectiveAddress),
+pub(crate) enum RegisterOrMemory32<'a> {
+    Register(&'a Register32),
+    Memory(&'a EffectiveAddress),
 }
 
-impl RegisterOrMemory {
+impl RegisterOrMemory32<'_> {
+    pub fn read32(&self, cpu: &Cpu) -> u32 {
+        match self {
+            Self::Register(register) => cpu.registers.read32(register),
+            Self::Memory(effective_address) => todo!(),
+        }
+    }
+
+    pub fn write32(&self, cpu: &mut Cpu, value: u32) {
+        match self {
+            Self::Register(register) => cpu.registers.write32(register, value),
+            Self::Memory(effective_address) => todo!(),
+        }
+    }
+}
+
+impl<'a> From<&'a Register32> for RegisterOrMemory32<'a> {
+    fn from(register: &'a Register32) -> Self {
+        register.into()
+    }
+}
+
+impl<'a> From<&'a EffectiveAddress> for RegisterOrMemory32<'a> {
+    fn from(effective_address: &'a EffectiveAddress) -> Self {
+        Self::Memory(effective_address)
+    }
+}
+
+impl<'a> TryFrom<&'a OperandType> for RegisterOrMemory32<'a> {
+    type Error = Error;
+
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
+        match operand_type {
+            OperandType::Immediate(_) => Err(Error::CannotCovertType(
+                "cannot convert an immediate value into a RegisterOrMemory32".into(),
+            )),
+            OperandType::Memory(effective_address) => Ok(Self::Memory(effective_address)),
+            OperandType::Register(register) => {
+                Ok(Self::Register(<&Register32>::try_from(register)?))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum RegisterOrMemory16<'a> {
+    Register(&'a Register16),
+    Memory(&'a EffectiveAddress),
+}
+
+impl RegisterOrMemory16<'_> {
+    pub fn read16(&self, cpu: &Cpu) -> u16 {
+        match self {
+            Self::Register(register) => cpu.registers.read16(register),
+            Self::Memory(effective_address) => todo!(),
+        }
+    }
+
+    pub fn write16(&self, cpu: &mut Cpu, value: u16) {
+        match self {
+            Self::Register(register) => cpu.registers.write16(register, value),
+            Self::Memory(effective_address) => todo!(),
+        }
+    }
+}
+
+impl<'a> From<&'a Register16> for RegisterOrMemory16<'a> {
+    fn from(register: &'a Register16) -> Self {
+        Self::Register(register)
+    }
+}
+
+impl<'a> From<&'a EffectiveAddress> for RegisterOrMemory16<'a> {
+    fn from(effective_address: &'a EffectiveAddress) -> Self {
+        effective_address.into()
+    }
+}
+
+impl<'a> TryFrom<&'a OperandType> for RegisterOrMemory16<'a> {
+    type Error = Error;
+
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
+        match operand_type {
+            OperandType::Immediate(_) => Err(Error::CannotCovertType(
+                "cannot convert an immediate value into a RegisterOrMemory16".into(),
+            )),
+            OperandType::Memory(effective_address) => Ok(Self::Memory(effective_address)),
+            OperandType::Register(register) => {
+                Ok(Self::Register(<&Register16>::try_from(register)?))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum RegisterOrMemory8<'a> {
+    Register(&'a Register8),
+    Memory(&'a EffectiveAddress),
+}
+
+impl RegisterOrMemory8<'_> {
     pub fn read8(&self, cpu: &Cpu) -> u8 {
         match self {
-            RegisterOrMemory::Register(register) => {
-                let Register::Register8(register) = register else {
-                    panic!("attempted to read 8 bits from {register}");
-                };
-                cpu.registers.read8(register)
-            }
-            RegisterOrMemory::Memory(effective_address) => todo!(),
+            Self::Register(register) => cpu.registers.read8(register),
+            Self::Memory(effective_address) => todo!(),
         }
     }
 
     pub fn write8(&self, cpu: &mut Cpu, value: u8) {
         match self {
-            RegisterOrMemory::Register(register) => {
-                let Register::Register8(register) = register else {
-                    panic!("attempted to write 8 bits to {register}");
-                };
-                cpu.registers.write8(register, value);
-            }
-            RegisterOrMemory::Memory(effective_address) => todo!(),
+            Self::Register(register) => cpu.registers.write8(register, value),
+            Self::Memory(effective_address) => todo!(),
         }
     }
 }
 
-impl From<Register> for RegisterOrMemory {
-    fn from(register: Register) -> Self {
+impl<'a> From<&'a Register8> for RegisterOrMemory8<'a> {
+    fn from(register: &'a Register8) -> Self {
         Self::Register(register)
     }
 }
 
-impl From<EffectiveAddress> for RegisterOrMemory {
-    fn from(effective_address: EffectiveAddress) -> Self {
-        Self::Memory(effective_address)
+impl From<&EffectiveAddress> for RegisterOrMemory8<'_> {
+    fn from(effective_address: &EffectiveAddress) -> Self {
+        effective_address.into()
     }
 }
 
-impl TryFrom<Operand> for RegisterOrMemory {
+impl<'a> TryFrom<&'a OperandType> for RegisterOrMemory8<'a> {
     type Error = Error;
 
-    fn try_from(operand: Operand) -> Result<Self, Self::Error> {
-        match operand.operand_type {
-            OperandType::Immediate(_) => Err(Error::InvalidOperandType(
-                "an immediate value cannot be converted into a RegisterOrMemory".into(),
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
+        match operand_type {
+            OperandType::Immediate(_) => Err(Error::CannotCovertType(
+                "cannot convert an immediate value into a RegisterOrMemory8".into(),
             )),
-            OperandType::Memory(memory) => Ok(Self::Memory(memory)),
-            OperandType::Register(register) => Ok(Self::Register(register)),
+            OperandType::Memory(effective_address) => Ok(Self::Memory(effective_address)),
+            OperandType::Register(register) => {
+                Ok(Self::Register(<&Register8>::try_from(register)?))
+            }
         }
     }
 }

@@ -1,6 +1,13 @@
 use num::{traits::WrappingAdd, FromPrimitive};
 
-use crate::{instruction::{Instruction, OperandType}, register::Registers, traits::LeastSignificantByte};
+use crate::{
+    instruction::{
+        unwrap_operands, Immediate, Instruction, OperandType, RegisterOrMemory16,
+        RegisterOrMemory32, RegisterOrMemory8,
+    },
+    register::{Register16, Register32, Register8, Registers},
+    traits::LeastSignificantByte,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct Cpu {
@@ -13,178 +20,253 @@ impl Cpu {
     // TODO: Tests, especially for wrapping.
     fn add_with_carry<T>(&mut self, a: T, b: T) -> T
     where
-        T: LeastSignificantByte + WrappingAdd + FromPrimitive
+        T: LeastSignificantByte + WrappingAdd + FromPrimitive,
     {
         let carry = self.registers.eflags.get_carry_flag() as u8;
         let result = a + b + FromPrimitive::from_u8(carry).unwrap();
-        self.registers.eflags.compute_parity_flag(&result) ;
+        self.registers.eflags.compute_parity_flag(&result);
         result
     }
     pub(crate) fn adc_al_imm8(&mut self, instruction: &Instruction) {
-        let immediate = instruction.unwrap_immediate_operand(0);
-        let result = self.add_with_carry(self.registers.get_al(), immediate.parsed() as u8);
+        let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
+        let result = self.add_with_carry(self.registers.get_al(), imm8.parsed() as u8);
         self.registers.set_al(result);
     }
     pub(crate) fn adc_ax_imm16(&mut self, instruction: &Instruction) {
-        let immediate = instruction.unwrap_immediate_operand(0);
-        let result = self.add_with_carry(self.registers.get_ax(), immediate.parsed() as u16);
+        let (_ax, imm16) = unwrap_operands!(instruction, &Register16, &Immediate);
+        let result = self.add_with_carry(self.registers.get_ax(), imm16.parsed() as u16);
         self.registers.set_ax(result);
     }
     pub(crate) fn adc_eax_imm32(&mut self, instruction: &Instruction) {
-        let immediate = instruction.unwrap_immediate_operand(0);
-        let result = self.add_with_carry(self.registers.get_eax(), immediate.parsed() as u32);
+        let (_eax, imm32) = unwrap_operands!(instruction, &Register32, &Immediate);
+        let result = self.add_with_carry(self.registers.get_eax(), imm32.parsed() as u32);
         self.registers.set_eax(result);
     }
     pub(crate) fn adc_reg8_rm8(&mut self, instruction: &Instruction) {
-        let destination = instruction.unwrap_register_operand(0);
-        let destination_value = self.registers.read8(&destination.try_into().unwrap());
-        let source_value = match &instruction.operands[1].operand_type {
-            OperandType::Immediate(_) => unreachable!(),
-            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
-            OperandType::Register(register) => self.registers.read8(&register.try_into().unwrap()),
-        };
-        let result = self.add_with_carry(destination_value, source_value);
-        self.registers.write8(&destination.try_into().unwrap(), result);
+        let (reg8, rm8) = unwrap_operands!(instruction, &Register8, RegisterOrMemory8);
+        let reg8_value = self.registers.read8(&reg8);
+        let result = self.add_with_carry(reg8_value, rm8.read8(&self));
+        self.registers.write8(&reg8, result);
     }
     pub(crate) fn adc_reg16_rm16(&mut self, instruction: &Instruction) {
-        let destination = instruction.unwrap_register_operand(0);
-        let destination_value = self.registers.get16(&destination.try_into().unwrap());
-        let source_value = match &instruction.operands[1].operand_type {
-            OperandType::Immediate(_) => unreachable!(),
-            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
-            OperandType::Register(register) => self.registers.get16(&register.try_into().unwrap()),
-        };
-        let result = self.add_with_carry(destination_value, source_value);
-        self.registers.set16(&destination.try_into().unwrap(), result);
+        let (reg16, rm16) = unwrap_operands!(instruction, &Register16, RegisterOrMemory16);
+        let reg16_value = self.registers.read16(&reg16);
+        let result = self.add_with_carry(reg16_value, rm16.read16(&self));
+        self.registers.write16(&reg16, result);
     }
     pub(crate) fn adc_reg32_rm32(&mut self, instruction: &Instruction) {
-        let destination = instruction.unwrap_register_operand(0);
-        let destination_value = self.registers.get32(&destination.try_into().unwrap());
-        let source_value = match &instruction.operands[1].operand_type {
-            OperandType::Immediate(_) => unreachable!(),
-            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
-            OperandType::Register(register) => self.registers.get32(&register.try_into().unwrap()),
-        };
-        let result = self.add_with_carry(destination_value, source_value);
-        self.registers.set32(&destination.try_into().unwrap(), result);
+        let (reg32, rm32) = unwrap_operands!(instruction, &Register32, RegisterOrMemory32);
+        let reg32_value = self.registers.read32(&reg32);
+        let result = self.add_with_carry(reg32_value, rm32.read32(&self));
+        self.registers.write32(&reg32, result);
     }
     pub(crate) fn adc_rm8_reg8(&mut self, instruction: &Instruction) {
-        // let destination = match &instruction.operands[0].operand_type {
-        //     OperandType::Immediate(_) => unreachable!(),
-        //     OperandType::Memory(effective_address) => todo!("resolve effective address to write to"),
-        //     OperandType::Register(register) => self.registers.get8(&registers.try_into().unwrap()),
-        // };
-        // let result = self.add_with_carry(destination_value, source_value);
-        todo!();
+        let (rm8, reg8) = unwrap_operands!(instruction, RegisterOrMemory8, &Register8);
+        let reg8_value = self.registers.read8(&reg8);
+        let result = self.add_with_carry(rm8.read8(&self), reg8_value);
+        rm8.write8(self, result);
     }
-    pub(crate) fn adc_rm16_reg16(&mut self, instruction: &Instruction) {  }
-    pub(crate) fn adc_rm32_reg32(&mut self, instruction: &Instruction) {  }
+    pub(crate) fn adc_rm16_reg16(&mut self, instruction: &Instruction) {
+        let (rm16, reg16) = unwrap_operands!(instruction, RegisterOrMemory16, &Register16);
+        let reg16_value = self.registers.read16(&reg16);
+        let result = self.add_with_carry(rm16.read16(&self), reg16_value);
+        rm16.write16(self, result);
+    }
+    pub(crate) fn adc_rm32_reg32(&mut self, instruction: &Instruction) {
+        let (rm32, reg32) = unwrap_operands!(instruction, RegisterOrMemory32, &Register32);
+        let reg32_value = self.registers.read32(&reg32);
+        let result = self.add_with_carry(rm32.read32(&self), reg32_value);
+        rm32.write32(self, result);
+    }
     /// Add the two operands together, wrapping if an overflow occurs, and set the appropriate
     /// flags.
     // TODO: Tests, especially for wrapping.
     fn add<T>(&mut self, a: T, b: T) -> T
     where
-        T: LeastSignificantByte + WrappingAdd
+        T: LeastSignificantByte + WrappingAdd,
     {
         let result = a + b;
         self.registers.eflags.compute_parity_flag(&result);
         result
     }
     pub(crate) fn add_al_imm8(&mut self, instruction: &Instruction) {
-        let immediate = instruction.unwrap_immediate_operand(0);
-        let result = self.add(self.registers.get_al(), immediate.parsed() as u8);
+        let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
+        let result = self.add(self.registers.get_al(), imm8.parsed() as u8);
         self.registers.set_al(result);
     }
     pub(crate) fn add_ax_imm16(&mut self, instruction: &Instruction) {
-        let immediate = instruction.unwrap_immediate_operand(0);
-        let result = self.add(self.registers.get_ax(), immediate.parsed() as u16);
+        let (_ax, imm16) = unwrap_operands!(instruction, &Register16, &Immediate);
+        let result = self.add(self.registers.get_ax(), imm16.parsed() as u16);
         self.registers.set_ax(result);
     }
     pub(crate) fn add_eax_imm32(&mut self, instruction: &Instruction) {
-        let immediate = instruction.unwrap_immediate_operand(0);
-        let result = self.add(self.registers.get_eax(), immediate.parsed() as u32);
+        let (_eax, imm32) = unwrap_operands!(instruction, &Register32, &Immediate);
+        let result = self.add(self.registers.get_eax(), imm32.parsed() as u32);
         self.registers.set_eax(result);
     }
     pub(crate) fn add_reg8_rm8(&mut self, instruction: &Instruction) {
-        let destination = instruction.unwrap_register_operand(0);
-        let destination_value = self.registers.read8(&destination.try_into().unwrap());
-        let source_value = match &instruction.operands[1].operand_type {
-            OperandType::Immediate(_) => unreachable!(),
-            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
-            OperandType::Register(register) => self.registers.read8(&register.try_into().unwrap()),
-        };
-        let result = self.add(destination_value, source_value);
-        self.registers.write8(&destination.try_into().unwrap(), result);
+        let (reg8, rm8) = unwrap_operands!(instruction, &Register8, RegisterOrMemory8);
+        let reg8_value = self.registers.read8(&reg8);
+        let result = self.add(reg8_value, rm8.read8(&self));
+        self.registers.write8(&reg8, result);
     }
     pub(crate) fn add_reg16_rm16(&mut self, instruction: &Instruction) {
-        let destination = instruction.unwrap_register_operand(0);
-        let destination_value = self.registers.get16(&destination.try_into().unwrap());
-        let source_value = match &instruction.operands[1].operand_type {
-            OperandType::Immediate(_) => unreachable!(),
-            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
-            OperandType::Register(register) => self.registers.get16(&register.try_into().unwrap()),
-        };
-        let result = self.add(destination_value, source_value);
-        self.registers.set16(&destination.try_into().unwrap(), result);
+        let (reg16, rm16) = unwrap_operands!(instruction, &Register16, RegisterOrMemory16);
+        let reg16_value = self.registers.read16(&reg16);
+        let result = self.add(reg16_value, rm16.read16(&self));
+        self.registers.write16(&reg16, result);
     }
     pub(crate) fn add_reg32_rm32(&mut self, instruction: &Instruction) {
-        let destination = instruction.unwrap_register_operand(0);
-        let destination_value = self.registers.get32(&destination.try_into().unwrap());
-        let source_value = match &instruction.operands[1].operand_type {
-            OperandType::Immediate(_) => unreachable!(),
-            OperandType::Memory(effective_address) => todo!("resolve effective address and get value"),
-            OperandType::Register(register) => self.registers.get32(&register.try_into().unwrap()),
-        };
-        let result = self.add(destination_value, source_value);
-        self.registers.set32(&destination.try_into().unwrap(), result);
+        let (reg32, rm32) = unwrap_operands!(instruction, &Register32, RegisterOrMemory32);
+        let reg32_value = self.registers.read32(&reg32);
+        let result = self.add(reg32_value, rm32.read32(&self));
+        self.registers.write32(&reg32, result);
     }
-    pub(crate) fn add_rm8_imm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn add_rm8_reg8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn add_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn add_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_al_imm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_ax_imm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_eax_imm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_reg8_rm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_reg16_rm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_reg32_rm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_rm8_reg8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn and_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn es(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn daa(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_al_imm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_ax_imm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_eax_imm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_reg8_rm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_reg16_rm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_reg32_rm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_rm8_reg8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn or_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn pop_ds(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn pop_es(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn pop_ss(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn push_cs(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn push_ds(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn push_es(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn push_ss(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_al_imm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_ax_imm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_eax_imm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_reg8_rm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_reg16_rm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_reg32_rm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_rm8_reg8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sbb_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_al_imm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_ax_imm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_eax_imm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_reg8_rm8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_reg16_rm16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_reg32_rm32(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_rm8_reg8(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_rm16_reg16(&mut self, instruction: &Instruction) { todo!() }
-    pub(crate) fn sub_rm32_reg32(&mut self, instruction: &Instruction) { todo!() }
+    pub(crate) fn add_rm8_imm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn add_rm8_reg8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn add_rm16_reg16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn add_rm32_reg32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_al_imm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_ax_imm16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_eax_imm32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_reg8_rm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_reg16_rm16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_reg32_rm32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_rm8_reg8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_rm16_reg16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn and_rm32_reg32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn es(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn daa(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_al_imm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_ax_imm16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_eax_imm32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_reg8_rm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_reg16_rm16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_reg32_rm32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_rm8_reg8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_rm16_reg16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn or_rm32_reg32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn pop_ds(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn pop_es(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn pop_ss(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn push_cs(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn push_ds(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn push_es(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn push_ss(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_al_imm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_ax_imm16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_eax_imm32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_reg8_rm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_reg16_rm16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_reg32_rm32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_rm8_reg8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_rm16_reg16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sbb_rm32_reg32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_al_imm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_ax_imm16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_eax_imm32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_reg8_rm8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_reg16_rm16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_reg32_rm32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_rm8_reg8(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_rm16_reg16(&mut self, instruction: &Instruction) {
+        todo!()
+    }
+    pub(crate) fn sub_rm32_reg32(&mut self, instruction: &Instruction) {
+        todo!()
+    }
 }
