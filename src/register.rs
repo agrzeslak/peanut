@@ -103,7 +103,7 @@ pub enum CurrentPrivilegeLevel {
 /// Indicates the I/O privilege level of the currently running program or task. The current
 /// privilege level (CPL) of the currently running program or task must be less than or equal
 /// to the I/O privilege level to access the I/O address space. The POPF and IRET instructions
-/// can modify this field only when operatina at a CPL of 0.
+/// can modify this field only when operating at a CPL of 0.
 ///
 /// NT (Nested Task Flag), bit 14, system flag.
 /// Controls the chaining of interrupted and called tasks. Set when the current task is linked

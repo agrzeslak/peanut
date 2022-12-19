@@ -2,8 +2,8 @@ use num::{traits::WrappingAdd, FromPrimitive};
 
 use crate::{
     instruction::{
-        unwrap_operands, Immediate, Instruction, OperandType, RegisterOrMemory16,
-        RegisterOrMemory32, RegisterOrMemory8,
+        unwrap_operands, Immediate, Instruction, RegisterOrMemory16, RegisterOrMemory32,
+        RegisterOrMemory8,
     },
     register::{Register16, Register32, Register8, Registers},
     traits::LeastSignificantByte,
