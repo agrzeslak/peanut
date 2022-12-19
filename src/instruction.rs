@@ -1456,7 +1456,7 @@ impl Instruction {
 
 macro_rules! unwrap_operands {
     ($instruction:ident, $type1:ty) => {
-        <$type1>::try_from($instruction.operands[0].operand_type).unwrap()
+        <$type1>::try_from(&$instruction.operands[0].operand_type).unwrap()
     };
     ($instruction:ident, $type1:ty, $type2:ty) => {
         (
@@ -1466,17 +1466,17 @@ macro_rules! unwrap_operands {
     };
     ($instruction:ident, $type1:ty, $type2:ty, $type3:ty) => {
         (
-            <$type1>::try_from($instruction.operands[0].operand_type).unwrap(),
-            <$type2>::try_from($instruction.operands[1].operand_type).unwrap(),
-            <$type3>::try_from($instruction.operands[2].operand_type).unwrap(),
+            <$type1>::try_from(&$instruction.operands[0].operand_type).unwrap(),
+            <$type2>::try_from(&$instruction.operands[1].operand_type).unwrap(),
+            <$type3>::try_from(&$instruction.operands[2].operand_type).unwrap(),
         )
     };
     ($instruction:ident, $type1:ty, $type2:ty, $type3:ty, $type4:ty) => {
         (
-            <$type1>::try_from($instruction.operands[0].operand_type).unwrap(),
-            <$type2>::try_from($instruction.operands[1].operand_type).unwrap(),
-            <$type3>::try_from($instruction.operands[2].operand_type).unwrap(),
-            <$type4>::try_from($instruction.operands[3].operand_type).unwrap(),
+            <$type1>::try_from(&$instruction.operands[0].operand_type).unwrap(),
+            <$type2>::try_from(&$instruction.operands[1].operand_type).unwrap(),
+            <$type3>::try_from(&$instruction.operands[2].operand_type).unwrap(),
+            <$type4>::try_from(&$instruction.operands[3].operand_type).unwrap(),
         )
     };
 }
