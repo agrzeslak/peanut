@@ -175,23 +175,23 @@ impl Eflags {
     /// Sets the parity flag if the least significant byte of the result of the last operation has
     /// an even number of bits set to 1. Providing a value larger than u64 will panic, however this
     /// should never be the case.
-    /// TODO: Tests.
-    pub(crate) fn compute_parity_flag<T: PrimInt>(&mut self, value: T) {
-        let least_significant_byte = value.to_u64().unwrap().to_le_bytes()[0];
+    // TODO: Tests.
+    pub(crate) fn compute_parity_flag<T: PrimInt>(&mut self, result: T) {
+        let least_significant_byte = result.to_u64().unwrap().to_le_bytes()[0];
         self.set_parity_flag(least_significant_byte % 2 == 0);
     }
 
     /// Sets the zero flag if the result is 0.
-    /// TODO: Tests.
-    pub(crate) fn compute_zero_flag<T: PrimInt>(&mut self, value: T) {
-        self.set_zero_flag(value.count_ones() == 0);
+    // TODO: Tests.
+    pub(crate) fn compute_zero_flag<T: PrimInt>(&mut self, result: T) {
+        self.set_zero_flag(result.count_ones() == 0);
     }
 
     /// Sets the sign flag to the most signifcant bit of the result.
-    /// TODO: Tests.
-    pub(crate) fn compute_sign_flag<T: PrimInt>(&mut self, value: T) {
+    // TODO: Tests.
+    pub(crate) fn compute_sign_flag<T: PrimInt>(&mut self, result: T) {
         let num_bits = mem::size_of::<T>() * 8;
-        let most_significant_bit = (value >> num_bits - 1) & T::one();
+        let most_significant_bit = (result >> num_bits - 1) & T::one();
         self.set_sign_flag(most_significant_bit.count_ones() != 0);
     }
 

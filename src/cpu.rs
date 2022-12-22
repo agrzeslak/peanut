@@ -1,6 +1,6 @@
 use std::ops::{BitAnd, BitOr};
 
-use num_traits::{FromPrimitive, PrimInt, WrappingAdd};
+use num_traits::{CheckedAdd, FromPrimitive, PrimInt, WrappingAdd};
 
 use crate::{
     instruction::{
@@ -16,6 +16,53 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    /// Performs wrapping addition, setting flags which can only be known by observing the
+    /// addition. These are OF, and AF.
+    /// TODO: Tests.
+    fn wrapping_add<T>(&mut self, destination: T, source: T) -> T
+    where
+        T: PrimInt + CheckedAdd + WrappingAdd,
+    {
+        let result = destination.wrapping_add(&source);
+
+        let overflowed = destination.checked_add(&source).is_none();
+        self.registers.eflags.set_carry_flag(overflowed);
+
+        let destination_bit3 = destination.unsigned_shr(3) & T::one();
+        let source_bit3 = source.unsigned_shr(3) & T::one();
+        self.registers
+            .eflags
+            .set_auxiliary_carry_flag(destination_bit3 & source_bit3 > T::zero());
+
+        result
+    }
+
+    /// Performs wrapping addition, also adding the carry flag, setting flags which can only be
+    /// known by observing the addition. These are OF, and AF.
+    /// TODO: Tests.
+    fn wrapping_add_with_carry<T>(&mut self, destination: T, source: T) -> T
+    where
+        T: PrimInt + CheckedAdd + WrappingAdd + FromPrimitive,
+    {
+        let carry = self.registers.eflags.get_carry_flag() as u8;
+        let carry = FromPrimitive::from_u8(carry).unwrap();
+        let result = destination.wrapping_add(&source).wrapping_add(&carry);
+
+        let overflowed = destination
+            .checked_add(&source)
+            .and_then(|n| n.checked_add(&carry))
+            .is_none();
+        self.registers.eflags.set_carry_flag(overflowed);
+
+        let destination_bit3 = destination.unsigned_shr(3) & T::one();
+        let source_bit3 = source.unsigned_shr(3) & T::one();
+        self.registers
+            .eflags
+            .set_auxiliary_carry_flag(destination_bit3 & source_bit3 > T::zero());
+
+        result
+    }
+
     /// Add the two operands and carry together, wrapping if an overflow occurs, and set the
     /// OF, SF, ZF, AF, CF, and PF flags according to the result.
     // TODO: Tests, especially for wrapping.
@@ -24,8 +71,7 @@ impl Cpu {
     where
         T: PrimInt + WrappingAdd + FromPrimitive,
     {
-        let carry = self.registers.eflags.get_carry_flag() as u8;
-        let result = a + b + FromPrimitive::from_u8(carry).unwrap();
+        let result = self.wrapping_add_with_carry(a, b);
         self.registers.eflags.compute_parity_flag(result);
         // TODO: OF, SF, ZF, AF, CF, and PF
         result
@@ -92,7 +138,7 @@ impl Cpu {
     where
         T: PrimInt + WrappingAdd,
     {
-        let result = a + b;
+        let result = self.wrapping_add(a, b);
         self.registers.eflags.compute_parity_flag(result);
         // TODO: OF, SF, ZF, AF, CF, and PF
         result
@@ -239,6 +285,7 @@ impl Cpu {
 
     /// Performs a bitwise inclusive OR operation. The OF and CF flags are cleared, and the SF, ZF,
     /// and PF flags are set according to the result. The AF flag is undefined.
+    /// TODO: Tests.
     fn or<T>(&mut self, a: T, b: T) -> T
     where
         T: PrimInt + BitOr<T>,
@@ -338,6 +385,23 @@ impl Cpu {
     pub(crate) fn push_ss(&mut self, instruction: &Instruction) {
         let _ss = unwrap_operands!(instruction, &Register16);
         todo!()
+    }
+
+    /// Integer subtraction with borrow. Adds the source and the carry flag, and subtracts the
+    /// result from the destination. Sets the OF, SF, ZF, AF, PF, and CF flags according to the
+    /// result.
+    /// TODO: Tests.
+    fn sbb<T>(&mut self, destination: T, source: T) -> T
+    where
+        T: PrimInt + FromPrimitive,
+    {
+        // TODO: Implementation needs to set overflow and auxiliary carry flags.
+        let carry = self.registers.eflags.get_carry_flag() as u8;
+        let result = destination - (source + T::from_u8(carry).unwrap());
+        self.registers.eflags.compute_sign_flag(result);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers.eflags.compute_parity_flag(result);
+        result
     }
 
     pub(crate) fn sbb_al_imm8(&mut self, instruction: &Instruction) {
