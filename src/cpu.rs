@@ -7,8 +7,7 @@ use crate::{
         unwrap_operands, Immediate, Instruction, RegisterOrMemory16, RegisterOrMemory32,
         RegisterOrMemory8,
     },
-    register::{Register8, Register16, Register32, Registers},
-    traits::LeastSignificantByte,
+    register::{Register16, Register32, Register8, Registers},
 };
 
 #[derive(Clone, Debug, Default)]
@@ -18,10 +17,10 @@ pub struct Cpu {
 
 impl Cpu {
     /// Add the two operands and carry together, wrapping if an overflow occurs, and set the
-    /// appropriate flags.
+    /// OF, SF, ZF, AF, CF, and PF flags according to the result.
     // TODO: Tests, especially for wrapping.
     // TODO: Document flags which are set.
-    fn add_with_carry<T>(&mut self, a: T, b: T) -> T
+    fn adc<T>(&mut self, a: T, b: T) -> T
     where
         T: PrimInt + WrappingAdd + FromPrimitive,
     {
@@ -34,62 +33,61 @@ impl Cpu {
 
     pub(crate) fn adc_al_imm8(&mut self, instruction: &Instruction) {
         let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
-        let result = self.add_with_carry(self.registers.get_al(), imm8.parsed() as u8);
+        let result = self.adc(self.registers.get_al(), imm8.parsed() as u8);
         self.registers.set_al(result);
     }
 
     pub(crate) fn adc_ax_imm16(&mut self, instruction: &Instruction) {
         let (_ax, imm16) = unwrap_operands!(instruction, &Register16, &Immediate);
-        let result = self.add_with_carry(self.registers.get_ax(), imm16.parsed() as u16);
+        let result = self.adc(self.registers.get_ax(), imm16.parsed() as u16);
         self.registers.set_ax(result);
     }
 
     pub(crate) fn adc_eax_imm32(&mut self, instruction: &Instruction) {
         let (_eax, imm32) = unwrap_operands!(instruction, &Register32, &Immediate);
-        let result = self.add_with_carry(self.registers.get_eax(), imm32.parsed() as u32);
+        let result = self.adc(self.registers.get_eax(), imm32.parsed() as u32);
         self.registers.set_eax(result);
     }
 
     pub(crate) fn adc_reg8_rm8(&mut self, instruction: &Instruction) {
         let (reg8, rm8) = unwrap_operands!(instruction, &Register8, RegisterOrMemory8);
-        let result = self.add_with_carry(self.registers.read8(reg8), rm8.read8(self));
+        let result = self.adc(self.registers.read8(reg8), rm8.read8(self));
         self.registers.write8(&reg8, result);
     }
 
     pub(crate) fn adc_reg16_rm16(&mut self, instruction: &Instruction) {
         let (reg16, rm16) = unwrap_operands!(instruction, &Register16, RegisterOrMemory16);
-        let result = self.add_with_carry(self.registers.read16(reg16), rm16.read16(self));
+        let result = self.adc(self.registers.read16(reg16), rm16.read16(self));
         self.registers.write16(&reg16, result);
     }
 
     pub(crate) fn adc_reg32_rm32(&mut self, instruction: &Instruction) {
         let (reg32, rm32) = unwrap_operands!(instruction, &Register32, RegisterOrMemory32);
-        let result = self.add_with_carry(self.registers.read32(reg32), rm32.read32(self));
+        let result = self.adc(self.registers.read32(reg32), rm32.read32(self));
         self.registers.write32(&reg32, result);
     }
 
     pub(crate) fn adc_rm8_reg8(&mut self, instruction: &Instruction) {
         let (rm8, reg8) = unwrap_operands!(instruction, RegisterOrMemory8, &Register8);
-        let result = self.add_with_carry(rm8.read8(self), self.registers.read8(reg8));
+        let result = self.adc(rm8.read8(self), self.registers.read8(reg8));
         rm8.write8(self, result);
     }
 
     pub(crate) fn adc_rm16_reg16(&mut self, instruction: &Instruction) {
         let (rm16, reg16) = unwrap_operands!(instruction, RegisterOrMemory16, &Register16);
-        let result = self.add_with_carry(rm16.read16(self), self.registers.read16(reg16));
+        let result = self.adc(rm16.read16(self), self.registers.read16(reg16));
         rm16.write16(self, result);
     }
 
     pub(crate) fn adc_rm32_reg32(&mut self, instruction: &Instruction) {
         let (rm32, reg32) = unwrap_operands!(instruction, RegisterOrMemory32, &Register32);
-        let result = self.add_with_carry(rm32.read32(self), self.registers.read32(reg32));
+        let result = self.adc(rm32.read32(self), self.registers.read32(reg32));
         rm32.write32(self, result);
     }
 
-    /// Add the two operands together, wrapping if an overflow occurs, and set the appropriate
-    /// flags.
+    /// Add the two operands together, wrapping if an overflow occurs, and set the OF, SF, ZF, AF,
+    /// CF, and PF flags according to the result.
     // TODO: Tests, especially for wrapping.
-    // TODO: Document flags which are set.
     fn add<T>(&mut self, a: T, b: T) -> T
     where
         T: PrimInt + WrappingAdd,
@@ -160,8 +158,9 @@ impl Cpu {
         rm32.write32(self, result);
     }
 
-    /// Performs a bitwise and operation. Clears the OF and CF flags, and sets the SF, ZF, and PF
+    /// Performs a bitwise AND operation. Clears the OF and CF flags, and sets the SF, ZF, and PF
     /// flags depending on the result. The state of the AF flag is undefined.
+    /// TODO: Tests.
     fn and<T>(&mut self, a: T, b: T) -> T
     where
         T: PrimInt + BitAnd<Output = T>,

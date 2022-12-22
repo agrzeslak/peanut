@@ -7,7 +7,6 @@ mod memory;
 mod modrm;
 mod register;
 mod sib;
-mod traits;
 
 use std::fs;
 
