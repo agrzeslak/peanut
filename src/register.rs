@@ -1,12 +1,12 @@
-use std::{fmt::Display, u32};
+use std::{fmt::Display, mem, u32};
 
 use bitmaps::Bitmap;
+use num_traits::PrimInt;
 use paste::paste;
 
 use crate::{
     error::Error,
     instruction::{NasmStr, OperandType, Size},
-    traits::LeastSignificantByte,
 };
 
 trait HighLowBytes32 {
@@ -174,8 +174,22 @@ impl Eflags {
 
     /// Sets the parity flag if the least significant byte of the result of the last operation has
     /// an even number of bits set to 1.
-    pub(crate) fn compute_parity_flag(&mut self, value: &impl LeastSignificantByte) {
-        self.set_parity_flag(value.least_significant_byte().count_ones() % 2 == 0);
+    pub(crate) fn compute_parity_flag<T: PrimInt>(&mut self, value: T) {
+        // This should never receive a value larger than u64.
+        let least_significant_byte = value.to_u64().unwrap().to_le_bytes()[0];
+        self.set_parity_flag(least_significant_byte % 2 == 0);
+    }
+
+    /// Sets the zero flag if the result is 0.
+    pub(crate) fn compute_zero_flag<T: PrimInt>(&mut self, value: T) {
+        self.set_zero_flag(value.count_ones() == 0);
+    }
+
+    /// Sets the sign flag to the most signifcant bit of the result.
+    pub(crate) fn compute_sign_flag<T: PrimInt>(&mut self, value: T) {
+        let num_bits = mem::size_of::<T>() * 8;
+        let most_significant_bit = (value >> num_bits - 1) & T::one();
+        self.set_sign_flag(most_significant_bit.count_ones() != 0);
     }
 
     pub fn get_iopl(&self) -> CurrentPrivilegeLevel {

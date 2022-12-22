@@ -1,4 +1,6 @@
-use num::{traits::WrappingAdd, FromPrimitive};
+use std::ops::BitAnd;
+
+use num_traits::{FromPrimitive, PrimInt, WrappingAdd};
 
 use crate::{
     instruction::{
@@ -18,13 +20,15 @@ impl Cpu {
     /// Add the two operands and carry together, wrapping if an overflow occurs, and set the
     /// appropriate flags.
     // TODO: Tests, especially for wrapping.
+    // TODO: Document flags which are set.
     fn add_with_carry<T>(&mut self, a: T, b: T) -> T
     where
-        T: LeastSignificantByte + WrappingAdd + FromPrimitive,
+        T: PrimInt + WrappingAdd + FromPrimitive,
     {
         let carry = self.registers.eflags.get_carry_flag() as u8;
         let result = a + b + FromPrimitive::from_u8(carry).unwrap();
-        self.registers.eflags.compute_parity_flag(&result);
+        self.registers.eflags.compute_parity_flag(result);
+        // TODO: OF, SF, ZF, AF, CF, and PF
         result
     }
 
@@ -85,12 +89,14 @@ impl Cpu {
     /// Add the two operands together, wrapping if an overflow occurs, and set the appropriate
     /// flags.
     // TODO: Tests, especially for wrapping.
+    // TODO: Document flags which are set.
     fn add<T>(&mut self, a: T, b: T) -> T
     where
-        T: LeastSignificantByte + WrappingAdd,
+        T: PrimInt + WrappingAdd,
     {
         let result = a + b;
-        self.registers.eflags.compute_parity_flag(&result);
+        self.registers.eflags.compute_parity_flag(result);
+        // TODO: OF, SF, ZF, AF, CF, and PF
         result
     }
 
@@ -154,19 +160,37 @@ impl Cpu {
         rm32.write32(self, result);
     }
 
+    /// Performs a bitwise and operation. Clears the OF and CF flags, and sets the SF, ZF, and PF
+    /// flags depending on the result. The state of the AF flag is undefined.
+    fn and<T>(&mut self, a: T, b: T) -> T
+    where
+        T: PrimInt + BitAnd<Output = T>,
+    {
+        let result = a & b;
+        self.registers.eflags.set_overflow_flag(false);
+        self.registers.eflags.set_carry_flag(false);
+        self.registers.eflags.compute_sign_flag(result);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers.eflags.compute_parity_flag(result);
+        result
+    }
+
     pub(crate) fn and_al_imm8(&mut self, instruction: &Instruction) {
         let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
-        todo!()
+        let result = self.and(self.registers.get_al(), imm8.parsed() as u8);
+        self.registers.set_al(result);
     }
 
     pub(crate) fn and_ax_imm16(&mut self, instruction: &Instruction) {
         let (_ax, imm16) = unwrap_operands!(instruction, &Register16, &Immediate);
-        todo!()
+        let result = self.and(self.registers.get_ax(), imm16.parsed() as u16);
+        self.registers.set_ax(result);
     }
 
     pub(crate) fn and_eax_imm32(&mut self, instruction: &Instruction) {
         let (_eax, imm32) = unwrap_operands!(instruction, &Register32, &Immediate);
-        todo!()
+        let result = self.and(self.registers.get_eax(), imm32.parsed() as u32);
+        self.registers.set_eax(result);
     }
 
     pub(crate) fn and_reg8_rm8(&mut self, instruction: &Instruction) {
