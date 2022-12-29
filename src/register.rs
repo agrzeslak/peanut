@@ -191,13 +191,10 @@ impl Eflags {
     /// number of bits. I.e. if two operands of the same sign are added, or two operands of
     /// opposite sign are subtracted and a result of different sign is produced.
     // TODO: Tests.
-    pub(crate) fn compute_overflow_flag<T: PrimInt>(
-        &mut self,
-        a: T,
-        b: T,
-        result: T,
-        operation: Operation,
-    ) {
+    pub(crate) fn compute_overflow_flag<T>(&mut self, a: T, b: T, result: T, operation: Operation)
+    where
+        T: PrimInt,
+    {
         let overflowed = match operation {
             Operation::Add => a.sign() == b.sign() && result.sign() != a.sign(),
             Operation::Subtract => a.sign() != b.sign() && result.sign() != a.sign(),
@@ -208,12 +205,10 @@ impl Eflags {
     /// Sets the auxiliary carry flag if a carry or borrow is generated out of the 3rd bit.
     // FIXME: Addition is wrong. Should also generate a carry if one of the bits at index 3 are
     //        set, and there is a carry from a lower index into them.
-    pub(crate) fn compute_auxiliary_carry_flag<T: PrimInt>(
-        &mut self,
-        a: T,
-        b: T,
-        operation: Operation,
-    ) {
+    pub(crate) fn compute_auxiliary_carry_flag<T>(&mut self, a: T, b: T, operation: Operation)
+    where
+        T: PrimInt,
+    {
         let carried = match operation {
             Operation::Add => a.bit_at_index(3) && b.bit_at_index(3),
             Operation::Subtract => todo!(),
