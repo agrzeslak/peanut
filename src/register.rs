@@ -1,4 +1,4 @@
-use std::{fmt::Display, mem, u32};
+use std::{fmt::Display, u32};
 
 use bitmaps::Bitmap;
 use num_traits::PrimInt;
@@ -8,46 +8,8 @@ use crate::{
     cpu::Operation,
     error::Error,
     instruction::{NasmStr, OperandType, Size},
-    traits::{BitIndex, MostSignificantBit, Signed},
+    traits::{BitIndex, HighLowBytes32, MostSignificantBit, Signed},
 };
-
-trait HighLowBytes32 {
-    fn get_low_16(&self) -> u16;
-    fn set_low_16(&mut self, value: u16);
-    fn get_high_8(&self) -> u8;
-    fn set_high_8(&mut self, value: u8);
-    fn get_low_8(&self) -> u8;
-    fn set_low_8(&mut self, value: u8);
-}
-
-impl HighLowBytes32 for u32 {
-    fn get_low_16(&self) -> u16 {
-        *self as u16
-    }
-
-    fn set_low_16(&mut self, value: u16) {
-        *self &= 0xffff0000;
-        *self |= value as u32
-    }
-
-    fn get_high_8(&self) -> u8 {
-        (*self >> 8) as u8
-    }
-
-    fn set_high_8(&mut self, value: u8) {
-        *self &= 0xffff00ff;
-        *self |= (value as u32) << 8
-    }
-
-    fn get_low_8(&self) -> u8 {
-        *self as u8
-    }
-
-    fn set_low_8(&mut self, value: u8) {
-        *self &= 0xffffff00;
-        *self |= value as u32;
-    }
-}
 
 pub enum CurrentPrivilegeLevel {
     CPL0,

@@ -12,6 +12,44 @@ impl<T: PrimInt> BitIndex for T {
     }
 }
 
+pub(crate) trait HighLowBytes32 {
+    fn get_low_16(&self) -> u16;
+    fn set_low_16(&mut self, value: u16);
+    fn get_high_8(&self) -> u8;
+    fn set_high_8(&mut self, value: u8);
+    fn get_low_8(&self) -> u8;
+    fn set_low_8(&mut self, value: u8);
+}
+
+impl HighLowBytes32 for u32 {
+    fn get_low_16(&self) -> u16 {
+        *self as u16
+    }
+
+    fn set_low_16(&mut self, value: u16) {
+        *self &= 0xffff0000;
+        *self |= value as u32
+    }
+
+    fn get_high_8(&self) -> u8 {
+        (*self >> 8) as u8
+    }
+
+    fn set_high_8(&mut self, value: u8) {
+        *self &= 0xffff00ff;
+        *self |= (value as u32) << 8
+    }
+
+    fn get_low_8(&self) -> u8 {
+        *self as u8
+    }
+
+    fn set_low_8(&mut self, value: u8) {
+        *self &= 0xffffff00;
+        *self |= value as u32;
+    }
+}
+
 pub(crate) trait MostSignificantBit {
     fn most_significant_bit(self) -> bool;
 }
