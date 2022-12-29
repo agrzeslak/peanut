@@ -5,8 +5,10 @@ use num_traits::PrimInt;
 use paste::paste;
 
 use crate::{
+    cpu::Operation,
     error::Error,
     instruction::{NasmStr, OperandType, Size},
+    traits::{BitIndex, MostSignificantBit, Signed},
 };
 
 trait HighLowBytes32 {
@@ -185,6 +187,40 @@ impl Eflags {
         self.set_parity_flag(least_significant_byte % 2 == 0);
     }
 
+    /// Sets the overflow flag if the signed addition (two's complement) cannot fit within the
+    /// number of bits. I.e. if two operands of the same sign are added, or two operands of
+    /// opposite sign are subtracted and a result of different sign is produced.
+    // TODO: Tests.
+    pub(crate) fn compute_overflow_flag<T: PrimInt>(
+        &mut self,
+        a: T,
+        b: T,
+        result: T,
+        operation: Operation,
+    ) {
+        let overflowed = match operation {
+            Operation::Add => a.sign() == b.sign() && result.sign() != a.sign(),
+            Operation::Subtract => a.sign() != b.sign() && result.sign() != a.sign(),
+        };
+        self.set_overflow_flag(overflowed);
+    }
+
+    /// Sets the auxiliary carry flag if a carry or borrow is generated out of the 3rd bit.
+    // FIXME: Addition is wrong. Should also generate a carry if one of the bits at index 3 are
+    //        set, and there is a carry from a lower index into them.
+    pub(crate) fn compute_auxiliary_carry_flag<T: PrimInt>(
+        &mut self,
+        a: T,
+        b: T,
+        operation: Operation,
+    ) {
+        let carried = match operation {
+            Operation::Add => a.bit_at_index(3) && b.bit_at_index(3),
+            Operation::Subtract => todo!(),
+        };
+        self.set_auxiliary_carry_flag(carried);
+    }
+
     /// Sets the zero flag if the result is 0.
     // TODO: Tests.
     pub(crate) fn compute_zero_flag<T: PrimInt>(&mut self, result: T) {
@@ -194,9 +230,7 @@ impl Eflags {
     /// Sets the sign flag to the most signifcant bit of the result.
     // TODO: Tests.
     pub(crate) fn compute_sign_flag<T: PrimInt>(&mut self, result: T) {
-        let num_bits = mem::size_of::<T>() * 8;
-        let most_significant_bit = (result >> num_bits - 1) & T::one();
-        self.set_sign_flag(most_significant_bit.count_ones() != 0);
+        self.set_sign_flag(result.most_significant_bit());
     }
 
     pub fn get_iopl(&self) -> CurrentPrivilegeLevel {

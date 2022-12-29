@@ -1,6 +1,6 @@
 use std::ops::{BitAnd, BitOr};
 
-use num_traits::{CheckedAdd, FromPrimitive, PrimInt, WrappingAdd};
+use num_traits::{CheckedAdd, CheckedSub, FromPrimitive, PrimInt, WrappingAdd, WrappingSub};
 
 use crate::{
     instruction::{
@@ -8,7 +8,14 @@ use crate::{
         RegisterOrMemory8,
     },
     register::{Register16, Register32, Register8, Registers},
+    traits::BitIndex,
 };
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Operation {
+    Add,
+    Subtract,
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Cpu {
@@ -25,14 +32,15 @@ impl Cpu {
     {
         let result = destination.wrapping_add(&source);
 
-        let overflowed = destination.checked_add(&source).is_none();
-        self.registers.eflags.set_carry_flag(overflowed);
+        let carried = destination.checked_add(&source).is_none();
+        self.registers.eflags.set_carry_flag(carried);
 
-        let destination_bit3 = destination.unsigned_shr(3) & T::one();
-        let source_bit3 = source.unsigned_shr(3) & T::one();
         self.registers
             .eflags
-            .set_auxiliary_carry_flag(destination_bit3 & source_bit3 > T::zero());
+            .compute_overflow_flag(destination, source, result, Operation::Add);
+        self.registers
+            .eflags
+            .compute_auxiliary_carry_flag(destination, source, Operation::Add);
 
         result
     }
@@ -40,6 +48,7 @@ impl Cpu {
     /// Performs wrapping addition, also adding the carry flag, setting flags which can only be
     /// known by observing the addition. These are OF, and AF.
     /// TODO: Tests.
+    /// TODO: Should the auxiliary carry be calculated with or without the carry?
     fn wrapping_add_with_carry<T>(&mut self, destination: T, source: T) -> T
     where
         T: PrimInt + CheckedAdd + WrappingAdd + FromPrimitive,
@@ -48,20 +57,35 @@ impl Cpu {
         let carry = FromPrimitive::from_u8(carry).unwrap();
         let result = destination.wrapping_add(&source).wrapping_add(&carry);
 
-        let overflowed = destination
+        let carried = destination
             .checked_add(&source)
             .and_then(|n| n.checked_add(&carry))
             .is_none();
-        self.registers.eflags.set_carry_flag(overflowed);
+        self.registers.eflags.set_carry_flag(carried);
 
-        let destination_bit3 = destination.unsigned_shr(3) & T::one();
-        let source_bit3 = source.unsigned_shr(3) & T::one();
         self.registers
             .eflags
-            .set_auxiliary_carry_flag(destination_bit3 & source_bit3 > T::zero());
+            .compute_overflow_flag(destination, source, result, Operation::Add);
+        self.registers
+            .eflags
+            .compute_auxiliary_carry_flag(destination, source, Operation::Add);
 
         result
     }
+
+    /// Performs wrapping subtraction, settings flags which can only be known by observing the
+    /// subtraction. These are OF, and AF.
+    // fn wrapping_sub<T>(&mut self, destination: T, source: T) -> T
+    // where
+    //     T: PrimInt + CheckedSub + WrappingSub,
+    // {
+    //     let result = destination.wrapping_sub(&source);
+    //
+    //     let overflowed = destination.checked_sub(&source).is_none();
+    //     self.registers.eflags.set_overflow_flag(overflowed);
+    //
+    //     let destination
+    // }
 
     /// Add the two operands and carry together, wrapping if an overflow occurs, and set the
     /// OF, SF, ZF, AF, CF, and PF flags according to the result.
