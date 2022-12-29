@@ -494,3 +494,142 @@ impl Cpu {
         todo!()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! assert_eflags {
+        (@ $cpu:ident, OF=$expected:literal) => {
+            assert_eq!($cpu.registers.eflags.get_overflow_flag(), $expected, "OF is incorrect")
+        };
+        (@ $cpu:ident, SF=$expected:literal) => {
+            assert_eq!($cpu.registers.eflags.get_sign_flag(), $expected, "SF is incorrect")
+        };
+        (@ $cpu:ident, ZF=$expected:literal) => {
+            assert_eq!($cpu.registers.eflags.get_zero_flag(), $expected, "ZF is incorrect")
+        };
+        (@ $cpu:ident, CF=$expected:literal) => {
+            assert_eq!($cpu.registers.eflags.get_carry_flag(), $expected, "CF is incorrect")
+        };
+        ($cpu:ident, $($flag:ident=$expected:literal),+) => {
+            $(assert_eflags!(@ $cpu, $flag=$expected));+
+        };
+    }
+
+    //       A                   B                   A + B              Flags
+    // ---------------     ----------------    ---------------      -----------------
+    // h  |  ud  |   d   | h  |  ud  |   d   | h  |  ud  |   d   | OF | SF | ZF | CF
+    // ---+------+-------+----+------+-------+----+------+-------+----+----+----+---
+    // 7F | 127  |  127  | 0  |  0   |   0   | 7F | 127  |  127  | 0  | 0  | 0  | 0
+    // FF | 255  |  -1   | 7F | 127  |  127  | 7E | 126  |  126  | 0  | 0  | 0  | 1
+    // 0  |  0   |   0   | 0  |  0   |   0   | 0  |  0   |   0   | 0  | 0  | 1  | 0
+    // FF | 255  |  -1   | 1  |  1   |   1   | 0  |  0   |   0   | 0  | 0  | 1  | 1
+    // FF | 255  |  -1   | 0  |  0   |   0   | FF | 255  |  -1   | 0  | 1  | 0  | 0
+    // FF | 255  |  -1   | FF | 255  |  -1   | FE | 254  |  -2   | 0  | 1  | 0  | 1
+    // FF | 255  |  -1   | 80 | 128  | -128  | 7F | 127  |  127  | 1  | 0  | 0  | 1
+    // 80 | 128  | -128  | 80 | 128  | -128  | 0  |  0   |   0   | 1  | 0  | 1  | 1
+    // 7F | 127  |  127  | 7F | 127  |  127  | FE | 254  |  -2   | 1  | 1  | 0  | 0
+    #[test]
+    fn add() {
+        let mut cpu = Cpu::default();
+
+        // Decimal
+        assert_eq!(cpu.wrapping_add(127i8, 0i8), 127i8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.wrapping_add(-1i8, 127i8), 126i8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(0i8, 127i8), 126i8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
+
+        assert_eq!(cpu.wrapping_add(-1i8, 1i8), 0i8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
+
+        assert_eq!(cpu.wrapping_add(-1i8, 0i8), -1i8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
+
+        assert_eq!(cpu.wrapping_add(-1i8, -1i8), -2i8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(-1i8, -128i8), 127i8);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(-128i8, -128i8), 0i8);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
+
+        assert_eq!(cpu.wrapping_add(127i8, 127i8), -2i8);
+        assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
+
+        // Unsigned decimal
+        assert_eq!(cpu.wrapping_add(127u8, 0u8), 127u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.wrapping_add(255u8, 127u8), 126u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(0u8, 0u8), 0u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
+
+        assert_eq!(cpu.wrapping_add(255u8, 1u8), 0u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
+
+        assert_eq!(cpu.wrapping_add(255u8, 0u8), 255u8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
+
+        assert_eq!(cpu.wrapping_add(255u8, 255u8), 254u8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(255u8, 128u8), 127u8);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(128u8, 128u8), 0u8);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
+
+        assert_eq!(cpu.wrapping_add(127u8, 127u8), 254u8);
+        assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
+
+        // Hexadecimal
+        assert_eq!(cpu.wrapping_add(0x7F, 0x0), 0x7F);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.wrapping_add(0xFF, 0x7F), 0x7E);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(0x0, 0x0), 0x0);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
+
+        assert_eq!(cpu.wrapping_add(0xFF, 0x1), 0x0);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
+
+        assert_eq!(cpu.wrapping_add(0xFF, 0x0), 0xFF);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
+
+        assert_eq!(cpu.wrapping_add(0xFF, 0xFF), 0xFE);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(0xFF, 0x80), 0x7F);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.wrapping_add(0x80, 0x80), 0x0);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
+
+        assert_eq!(cpu.wrapping_add(0x7F, 0x7F), 0xFE);
+        assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
+    }
+
+    //       A                   B                   A - B              Flags
+    // ---------------     ----------------    ---------------      -----------------
+    // h  |  ud  |   d   | h  |  ud  |   d   | h  |  ud  |   d   || OF | SF | ZF | CF
+    // ---+------+-------+----+------+-------+----+------+-------++----+----+----+----
+    // FF | 255  |  -1   | FE | 254  |  -2   | 1  |  1   |   1   || 0  | 0  | 0  | 0
+    // 7E | 126  |  126  | FF | 255  |  -1   | 7F | 127  |  127  || 0  | 0  | 0  | 1
+    // FF | 255  |  -1   | FF | 255  |  -1   | 0  |  0   |   0   || 0  | 0  | 1  | 0
+    // FF | 255  |  -1   | 7F | 127  |  127  | 80 | 128  | -128  || 0  | 1  | 0  | 0
+    // FE | 254  |  -2   | FF | 255  |  -1   | FF | 255  |  -1   || 0  | 1  | 0  | 1
+    // FE | 254  |  -2   | 7F | 127  |  127  | 7F | 127  |  127  || 1  | 0  | 0  | 0
+    // 7F | 127  |  127  | FF | 255  |  -1   | 80 | 128  | -128  || 1  | 1  | 0  | 1
+    #[test]
+    fn sub() {}
+}

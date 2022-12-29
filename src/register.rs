@@ -97,7 +97,11 @@ pub enum CurrentPrivilegeLevel {
 /// OF (Overflow Flag), bit 11, status flag.
 /// Set if the integer result is too large a positive number or too small a negative number
 /// (excluding the sign-bit) to fit in the destination operand; cleared otherwise. This flag
-/// indicates an overflow condition for signed-integer (two’s complement) arithmetic.
+/// indicates an overflow condition for signed-integer (two’s complement) arithmetic. I.e. it is
+/// set when the most significant bit (sign bit) is changed by adding two numbers with the same
+/// sign, or subtracting two numbers with opposite signs. Overflow cannot occur when the sign of
+/// two addition operads are different, or the sign of two subtraction operands are the same. This
+/// flag is meaningless/ignored for unsigned arithmetic.
 ///
 /// IOPL (I/O Privilege Level Field), bits 12 and 13, system flag.
 /// Indicates the I/O privilege level of the currently running program or task. The current
