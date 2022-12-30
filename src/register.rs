@@ -1,7 +1,7 @@
-use std::{fmt::Display, u32};
+use std::{fmt::Display, mem, u32};
 
 use bitmaps::Bitmap;
-use num_traits::PrimInt;
+use num_traits::{PrimInt, WrappingAdd, WrappingSub};
 use paste::paste;
 
 use crate::{
@@ -139,6 +139,41 @@ impl Eflags {
     eflags_accessors!(virtual_interrupt_flag, 19);
     eflags_accessors!(virtual_interrupt_pending_flag, 20);
     eflags_accessors!(identification_flag, 21);
+
+    /// Sets the carry flag based on whether the unsigned addition/subtraction generated a
+    /// carry/borrow.
+    // FIXME: Surely there is a simple way to generically reinterpret the bits as unsigned.
+    pub(crate) fn compute_carry_flag_add<T: PrimInt + WrappingAdd>(&mut self, a: T, b: T) {
+        let size_bits = dbg!(mem::size_of::<T>() * 8);
+        let carried = match size_bits {
+            8 => {
+                let a = a.to_isize().unwrap() as u8;
+                let b = b.to_isize().unwrap() as u8;
+                a.checked_add(b).is_none()
+            }
+            16 => {
+                let a = a.to_isize().unwrap() as u16;
+                let b = b.to_isize().unwrap() as u16;
+                a.checked_add(b).is_none()
+            }
+            32 => {
+                let a = a.to_isize().unwrap() as u32;
+                let b = b.to_isize().unwrap() as u32;
+                a.checked_add(b).is_none()
+            }
+            64 => {
+                let a = a.to_isize().unwrap() as u64;
+                let b = b.to_isize().unwrap() as u64;
+                a.checked_add(b).is_none()
+            }
+            _ => unimplemented!(),
+        };
+        self.set_carry_flag(carried);
+    }
+
+    pub(crate) fn compute_carry_flag_sub<T: PrimInt + WrappingSub>(&mut self, a: T, b: T) {
+        self.set_carry_flag(a.wrapping_sub(&b) > a);
+    }
 
     /// Sets the parity flag if the least significant byte of the result of the last operation has
     /// an even number of bits set to 1. Providing a value larger than u64 will panic, however this

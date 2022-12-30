@@ -8,7 +8,6 @@ use crate::{
         RegisterOrMemory8,
     },
     register::{Register16, Register32, Register8, Registers},
-    traits::BitIndex,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -32,9 +31,11 @@ impl Cpu {
     {
         let result = destination.wrapping_add(&source);
 
-        let carried = destination.checked_add(&source).is_none();
-        self.registers.eflags.set_carry_flag(carried);
-
+        self.registers
+            .eflags
+            .compute_carry_flag_add(destination, source);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers.eflags.compute_sign_flag(result);
         self.registers
             .eflags
             .compute_overflow_flag(destination, source, result, Operation::Add);
@@ -57,12 +58,14 @@ impl Cpu {
         let carry = FromPrimitive::from_u8(carry).unwrap();
         let result = destination.wrapping_add(&source).wrapping_add(&carry);
 
+        // FIXME: Use `compute_carry_flag`.
         let carried = destination
             .checked_add(&source)
             .and_then(|n| n.checked_add(&carry))
             .is_none();
         self.registers.eflags.set_carry_flag(carried);
-
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers.eflags.compute_sign_flag(result);
         self.registers
             .eflags
             .compute_overflow_flag(destination, source, result, Operation::Add);
@@ -559,87 +562,87 @@ mod tests {
         let mut cpu = Cpu::default();
 
         // Decimal
-        assert_eq!(cpu.wrapping_add(127i8, 0i8), 127i8);
+        assert_eq!(cpu.wrapping_add(127_i8, 0_i8), 127_i8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(-1i8, 127i8), 126i8);
+        assert_eq!(cpu.wrapping_add(-1_i8, 127_i8), 126_i8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0i8, 127i8), 126i8);
+        assert_eq!(cpu.wrapping_add(0_i8, 0_i8), 0_i8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
 
-        assert_eq!(cpu.wrapping_add(-1i8, 1i8), 0i8);
-        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
+        assert_eq!(cpu.wrapping_add(-1_i8, 1_i8), 0_i8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(-1i8, 0i8), -1i8);
+        assert_eq!(cpu.wrapping_add(-1_i8, 0_i8), -1_i8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(-1i8, -1i8), -2i8);
+        assert_eq!(cpu.wrapping_add(-1_i8, -1_i8), -2_i8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(-1i8, -128i8), 127i8);
+        assert_eq!(cpu.wrapping_add(-1_i8, -128_i8), 127_i8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(-128i8, -128i8), 0i8);
+        assert_eq!(cpu.wrapping_add(-128_i8, -128_i8), 0_i8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(127i8, 127i8), -2i8);
+        assert_eq!(cpu.wrapping_add(127_i8, 127_i8), -2_i8);
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
 
         // Unsigned decimal
-        assert_eq!(cpu.wrapping_add(127u8, 0u8), 127u8);
+        assert_eq!(cpu.wrapping_add(127_u8, 0_u8), 127_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(255u8, 127u8), 126u8);
+        assert_eq!(cpu.wrapping_add(255_u8, 127_u8), 126_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0u8, 0u8), 0u8);
+        assert_eq!(cpu.wrapping_add(0_u8, 0_u8), 0_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
 
-        assert_eq!(cpu.wrapping_add(255u8, 1u8), 0u8);
+        assert_eq!(cpu.wrapping_add(255_u8, 1_u8), 0_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(255u8, 0u8), 255u8);
+        assert_eq!(cpu.wrapping_add(255_u8, 0_u8), 255_u8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(255u8, 255u8), 254u8);
+        assert_eq!(cpu.wrapping_add(255_u8, 255_u8), 254_u8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(255u8, 128u8), 127u8);
+        assert_eq!(cpu.wrapping_add(255_u8, 128_u8), 127_u8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(128u8, 128u8), 0u8);
+        assert_eq!(cpu.wrapping_add(128_u8, 128_u8), 0_u8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(127u8, 127u8), 254u8);
+        assert_eq!(cpu.wrapping_add(127_u8, 127_u8), 254_u8);
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
 
         // Hexadecimal
-        assert_eq!(cpu.wrapping_add(0x7F, 0x0), 0x7F);
+        assert_eq!(cpu.wrapping_add(0x7F_u8, 0x0_u8), 0x7F_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(0xFF, 0x7F), 0x7E);
+        assert_eq!(cpu.wrapping_add(0xFF_u8, 0x7F_u8), 0x7E_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0x0, 0x0), 0x0);
+        assert_eq!(cpu.wrapping_add(0x0_u8, 0x0_u8), 0x0_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
 
-        assert_eq!(cpu.wrapping_add(0xFF, 0x1), 0x0);
+        assert_eq!(cpu.wrapping_add(0xFF_u8, 0x1_u8), 0x0_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0xFF, 0x0), 0xFF);
+        assert_eq!(cpu.wrapping_add(0xFF_u8, 0x0_u8), 0xFF_u8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(0xFF, 0xFF), 0xFE);
+        assert_eq!(cpu.wrapping_add(0xFF_u8, 0xFF_u8), 0xFE_u8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0xFF, 0x80), 0x7F);
+        assert_eq!(cpu.wrapping_add(0xFF_u8, 0x80_u8), 0x7F_u8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0x80, 0x80), 0x0);
+        assert_eq!(cpu.wrapping_add(0x80_u8, 0x80_u8), 0x0_u8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0x7F, 0x7F), 0xFE);
+        assert_eq!(cpu.wrapping_add(0x7F_u8, 0x7F_u8), 0xFE_u8);
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
     }
 
