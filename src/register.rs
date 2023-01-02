@@ -141,29 +141,30 @@ impl Eflags {
     eflags_accessors!(identification_flag, 21);
 
     /// Sets the carry flag based on whether the unsigned addition/subtraction generated a
-    /// carry/borrow.
+    /// carry/borrow. Panics if a value is provided that is not of size 8, 16, 32, or 64. This
+    /// should never happen.
     // FIXME: Surely there is a simple way to generically reinterpret the bits as unsigned.
     pub(crate) fn compute_carry_flag_add<T: PrimInt + WrappingAdd>(&mut self, a: T, b: T) {
-        let size_bits = dbg!(mem::size_of::<T>() * 8);
+        let size_bits = mem::size_of::<T>() * 8;
         let carried = match size_bits {
             8 => {
-                let a = a.to_isize().unwrap() as u8;
-                let b = b.to_isize().unwrap() as u8;
+                let a = a.to_i16().unwrap() as u8;
+                let b = b.to_i16().unwrap() as u8;
                 a.checked_add(b).is_none()
             }
             16 => {
-                let a = a.to_isize().unwrap() as u16;
-                let b = b.to_isize().unwrap() as u16;
+                let a = a.to_i32().unwrap() as u16;
+                let b = b.to_i32().unwrap() as u16;
                 a.checked_add(b).is_none()
             }
             32 => {
-                let a = a.to_isize().unwrap() as u32;
-                let b = b.to_isize().unwrap() as u32;
+                let a = a.to_i64().unwrap() as u32;
+                let b = b.to_i64().unwrap() as u32;
                 a.checked_add(b).is_none()
             }
             64 => {
-                let a = a.to_isize().unwrap() as u64;
-                let b = b.to_isize().unwrap() as u64;
+                let a = a.to_i128().unwrap() as u64;
+                let b = b.to_i128().unwrap() as u64;
                 a.checked_add(b).is_none()
             }
             _ => unimplemented!(),
