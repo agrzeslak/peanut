@@ -187,10 +187,6 @@ impl Eflags {
         self.set_carry_flag(carried);
     }
 
-    pub(crate) fn compute_carry_flag_sub<T: PrimInt + WrappingSub>(&mut self, a: T, b: T) {
-        self.set_carry_flag(a.wrapping_sub(&b) > a);
-    }
-
     /// Sets the parity flag if the least significant byte of the result of the last operation has
     /// an even number of bits set to 1. Providing a value larger than u64 will panic, however this
     /// should never be the case.
