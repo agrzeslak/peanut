@@ -7,7 +7,7 @@ use crate::{
         unwrap_operands, Immediate, Instruction, RegisterOrMemory16, RegisterOrMemory32,
         RegisterOrMemory8,
     },
-    register::{Register16, Register32, Register8, Registers},
+    register::{Register16, Register32, Register8, Registers, WithCarry}, traits::AsUnsigned,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -27,13 +27,13 @@ impl Cpu {
     /// TODO: Tests.
     fn wrapping_add<T>(&mut self, destination: T, source: T) -> T
     where
-        T: PrimInt + CheckedAdd + WrappingAdd,
+        T: PrimInt + CheckedAdd + WrappingAdd + AsUnsigned,
     {
         let result = destination.wrapping_add(&source);
 
         self.registers
             .eflags
-            .compute_carry_flag_add(destination, source);
+            .compute_carry_flag(destination, source, Operation::Add, WithCarry::No);
         self.registers.eflags.compute_zero_flag(result);
         self.registers.eflags.compute_sign_flag(result);
         self.registers
@@ -52,18 +52,15 @@ impl Cpu {
     /// TODO: Should the auxiliary carry be calculated with or without the carry?
     fn wrapping_add_with_carry<T>(&mut self, destination: T, source: T) -> T
     where
-        T: PrimInt + CheckedAdd + WrappingAdd + FromPrimitive,
+        T: PrimInt + CheckedAdd + WrappingAdd + FromPrimitive + AsUnsigned,
     {
         let carry = self.registers.eflags.get_carry_flag() as u8;
         let carry = FromPrimitive::from_u8(carry).unwrap();
         let result = destination.wrapping_add(&source).wrapping_add(&carry);
 
-        // FIXME: Use `compute_carry_flag`.
-        let carried = destination
-            .checked_add(&source)
-            .and_then(|n| n.checked_add(&carry))
-            .is_none();
-        self.registers.eflags.set_carry_flag(carried);
+        self.registers
+            .eflags
+            .compute_carry_flag(destination, source, Operation::Add, WithCarry::Yes);
         self.registers.eflags.compute_zero_flag(result);
         self.registers.eflags.compute_sign_flag(result);
         self.registers
@@ -96,7 +93,7 @@ impl Cpu {
     // TODO: Document flags which are set.
     fn adc<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + WrappingAdd + FromPrimitive,
+        T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
         let result = self.wrapping_add_with_carry(a, b);
         self.registers.eflags.compute_parity_flag(result);
@@ -163,7 +160,7 @@ impl Cpu {
     // TODO: Tests, especially for wrapping.
     fn add<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + WrappingAdd,
+        T: PrimInt + WrappingAdd + AsUnsigned,
     {
         let result = self.wrapping_add(a, b);
         self.registers.eflags.compute_parity_flag(result);

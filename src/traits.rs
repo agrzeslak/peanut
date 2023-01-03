@@ -1,6 +1,6 @@
 use std::mem;
 
-use num_traits::PrimInt;
+use num_traits::{PrimInt, Unsigned};
 
 pub(crate) trait BitIndex {
     fn bit_at_index(self, index: u32) -> bool;
@@ -77,5 +77,74 @@ impl<T: PrimInt> Signed for T {
             false => Sign::Positive,
             true => Sign::Negative,
         }
+    }
+}
+
+pub(crate) trait AsUnsigned {
+    type Unsigned: PrimInt;
+
+    fn as_unsigned(self) -> Self::Unsigned;
+}
+
+macro_rules! impl_as_unsigned {
+    ($signed:ty, $unsigned:ty) => {
+        impl AsUnsigned for $signed {
+            type Unsigned = $unsigned;
+
+            fn as_unsigned(self) -> Self::Unsigned {
+                self as $unsigned
+            }
+        }
+    };
+    ($unsigned:ty) => {
+        impl AsUnsigned for $unsigned {
+            type Unsigned = Self;
+
+            fn as_unsigned(self) -> Self::Unsigned {
+                self
+            }
+        }
+    }
+}
+
+impl_as_unsigned!(u8);
+impl_as_unsigned!(u16);
+impl_as_unsigned!(u32);
+impl_as_unsigned!(u64);
+impl_as_unsigned!(u128);
+
+impl_as_unsigned!(i8, u8);
+impl_as_unsigned!(i16, u16);
+impl_as_unsigned!(i32, u32);
+impl_as_unsigned!(i64, u64);
+impl_as_unsigned!(i128, u128);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! test_as_unsigned {
+        ($source_type:ty, $target_type:ty) => {
+            let value: $source_type = 0;
+            assert_eq!(value as $target_type, value.as_unsigned());
+            let value = <$source_type>::MIN;
+            assert_eq!(value as $target_type, value.as_unsigned());
+            let value = <$source_type>::MAX;
+            assert_eq!(value as $target_type, value.as_unsigned());
+        };
+    }
+
+    #[test]
+    fn as_unsigned() {
+        test_as_unsigned!(u8, u8);
+        test_as_unsigned!(i8, u8);
+        test_as_unsigned!(u16, u16);
+        test_as_unsigned!(i16, u16);
+        test_as_unsigned!(u32, u32);
+        test_as_unsigned!(i32, u32);
+        test_as_unsigned!(u64, u64);
+        test_as_unsigned!(i64, u64);
+        test_as_unsigned!(u128, u128);
+        test_as_unsigned!(i128, u128);
     }
 }
