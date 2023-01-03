@@ -81,7 +81,7 @@ impl<T: PrimInt> Signed for T {
 }
 
 pub(crate) trait AsUnsigned {
-    type Unsigned: PrimInt;
+    type Unsigned: PrimInt + Unsigned;
 
     fn as_unsigned(self) -> Self::Unsigned;
 }
