@@ -1,13 +1,16 @@
 use std::ops::{BitAnd, BitOr};
 
-use num_traits::{CheckedAdd, CheckedSub, FromPrimitive, PrimInt, WrappingAdd, WrappingSub, Unsigned};
+use num_traits::{
+    CheckedAdd, CheckedSub, FromPrimitive, PrimInt, Unsigned, WrappingAdd, WrappingSub,
+};
 
 use crate::{
     instruction::{
         unwrap_operands, Immediate, Instruction, RegisterOrMemory16, RegisterOrMemory32,
         RegisterOrMemory8,
     },
-    register::{Register16, Register32, Register8, Registers, WithCarry}, traits::AsUnsigned,
+    register::{Register16, Register32, Register8, Registers, WithCarry},
+    traits::AsUnsigned,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -77,10 +80,9 @@ impl Cpu {
     /// OF, SF, ZF, AF, CF, and PF flags according to the result.
     // TODO: Tests, especially for wrapping.
     // TODO: Document flags which are set.
-    // FIXME: Remove `AsUnsigned` bound.
     fn adc<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + WrappingAdd + FromPrimitive + Unsigned + AsUnsigned,
+        T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
         let result = self.wrapping_add(a, b, WithCarry::True);
         self.registers.eflags.compute_parity_flag(result);
@@ -153,7 +155,7 @@ impl Cpu {
     // FIXME: Remove AsUnsigned bound.
     fn add<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + WrappingAdd + FromPrimitive + Unsigned + AsUnsigned,
+        T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
         let result = self.wrapping_add(a, b, WithCarry::False);
         self.registers.eflags.compute_parity_flag(result);
@@ -231,7 +233,7 @@ impl Cpu {
     /// TODO: Tests.
     fn and<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + BitAnd<Output = T> + FromPrimitive + Unsigned,
+        T: PrimInt + BitAnd<Output = T> + AsUnsigned + FromPrimitive,
     {
         let result = a & b;
         self.registers.eflags.set_overflow_flag(false);
@@ -310,7 +312,7 @@ impl Cpu {
     /// TODO: Tests.
     fn or<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + BitOr<T> + Unsigned + FromPrimitive,
+        T: PrimInt + BitOr<T> + AsUnsigned + FromPrimitive,
     {
         let result = a | b;
         self.registers.eflags.set_overflow_flag(false);
@@ -415,7 +417,7 @@ impl Cpu {
     /// TODO: Tests.
     fn sbb<T>(&mut self, destination: T, source: T) -> T
     where
-        T: PrimInt + FromPrimitive + Unsigned,
+        T: PrimInt + AsUnsigned + FromPrimitive,
     {
         // TODO: Implementation needs to set overflow and auxiliary carry flags.
         let carry = self.registers.eflags.get_carry_flag() as u8;
@@ -557,31 +559,31 @@ mod tests {
         let mut cpu = Cpu::default();
 
         // Decimal
-        assert_eq!(cpu.add(127_i8.as_unsigned(), 0_i8.as_unsigned()), 127_i8.as_unsigned());
+        assert_eq!(cpu.add(127_i8, 0_i8), 127_i8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
 
-        assert_eq!(cpu.add((-1_i8).as_unsigned(), 127_i8.as_unsigned()), 126_i8.as_unsigned());
+        assert_eq!(cpu.add(-1_i8, 127_i8), 126_i8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.add(0_i8.as_unsigned(), 0_i8.as_unsigned()), 0_i8.as_unsigned());
+        assert_eq!(cpu.add(0_i8, 0_i8), 0_i8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
 
-        assert_eq!(cpu.add((-1_i8).as_unsigned(), 1_i8.as_unsigned()), 0_i8.as_unsigned());
+        assert_eq!(cpu.add(-1_i8, 1_i8), 0_i8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.add((-1_i8).as_unsigned(), 0_i8.as_unsigned()), (-1_i8).as_unsigned());
+        assert_eq!(cpu.add(-1_i8, 0_i8), -1_i8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
 
-        assert_eq!(cpu.add((-1_i8).as_unsigned(), (-1_i8).as_unsigned()), (-2_i8).as_unsigned());
+        assert_eq!(cpu.add(-1_i8, -1_i8), -2_i8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
 
-        assert_eq!(cpu.add((-1_i8).as_unsigned(), (-128_i8).as_unsigned()), 127_i8.as_unsigned());
+        assert_eq!(cpu.add(-1_i8, -128_i8), 127_i8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.add((-128_i8).as_unsigned(), (-128_i8).as_unsigned()), 0_i8.as_unsigned());
+        assert_eq!(cpu.add(-128_i8, -128_i8), 0_i8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.add(127_i8.as_unsigned(), 127_i8.as_unsigned()), (-2_i8).as_unsigned());
+        assert_eq!(cpu.add(127_i8, 127_i8), -2_i8);
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
 
         // Unsigned decimal

@@ -1,6 +1,6 @@
 use std::mem;
 
-use num_traits::{PrimInt, Unsigned};
+use num_traits::{PrimInt, Unsigned, FromPrimitive};
 
 pub(crate) trait BitIndex {
     fn bit_at_index(self, index: u32) -> bool;
@@ -81,7 +81,7 @@ impl<T: PrimInt> Signed for T {
 }
 
 pub(crate) trait AsUnsigned {
-    type Unsigned: PrimInt + Unsigned;
+    type Unsigned: PrimInt + FromPrimitive + Unsigned;
 
     fn as_unsigned(self) -> Self::Unsigned;
 }

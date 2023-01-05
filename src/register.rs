@@ -191,8 +191,11 @@ impl Eflags {
     /// an even number of bits set to 1. Providing a value larger than u64 will panic, however this
     /// should never be the case.
     // TODO: Tests.
-    pub(crate) fn compute_parity_flag<T: PrimInt + Unsigned + FromPrimitive>(&mut self, result: T) {
-        let least_significant_byte = result & FromPrimitive::from_u8(0xFF).unwrap();
+    pub(crate) fn compute_parity_flag<T: PrimInt + AsUnsigned + FromPrimitive>(
+        &mut self,
+        result: T,
+    ) {
+        let least_significant_byte = result.as_unsigned() & FromPrimitive::from_u8(0xFF).unwrap();
         self.set_parity_flag(least_significant_byte.count_ones() % 2 == 0);
     }
 
