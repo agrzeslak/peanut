@@ -51,13 +51,13 @@ impl HighLowBytes32 for u32 {
 }
 
 pub(crate) trait MostSignificantBit {
-    fn most_significant_bit(self) -> bool;
+    fn most_significant_bit(&self) -> bool;
 }
 
 impl<T: PrimInt> MostSignificantBit for T {
-    fn most_significant_bit(self) -> bool {
+    fn most_significant_bit(&self) -> bool {
         let num_bits = mem::size_of::<T>() * 8;
-        (self >> num_bits - 1) & T::one() > T::zero()
+        (*self >> num_bits - 1) & T::one() > T::zero()
     }
 }
 
@@ -112,12 +112,14 @@ impl_as_unsigned!(u16);
 impl_as_unsigned!(u32);
 impl_as_unsigned!(u64);
 impl_as_unsigned!(u128);
+impl_as_unsigned!(usize);
 
 impl_as_unsigned!(i8, u8);
 impl_as_unsigned!(i16, u16);
 impl_as_unsigned!(i32, u32);
 impl_as_unsigned!(i64, u64);
 impl_as_unsigned!(i128, u128);
+impl_as_unsigned!(isize, usize);
 
 #[cfg(test)]
 mod tests {

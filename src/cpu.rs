@@ -1,6 +1,6 @@
 use std::ops::{BitAnd, BitOr};
 
-use num_traits::{CheckedAdd, CheckedSub, FromPrimitive, PrimInt, WrappingAdd, WrappingSub};
+use num_traits::{CheckedAdd, CheckedSub, FromPrimitive, PrimInt, WrappingAdd, WrappingSub, Unsigned};
 
 use crate::{
     instruction::{
@@ -22,47 +22,22 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    /// Performs wrapping addition, setting flags which can only be known by observing the
-    /// addition. These are OF, and AF.
-    /// TODO: Tests.
-    fn wrapping_add<T>(&mut self, destination: T, source: T) -> T
+    /// Performs wrapping addition, adding the carry flag if required, and setting flags which can
+    /// only be known by observing the addition. These are OF, and AF. Other flags are not set and
+    /// should be set separately.
+    // TODO: Tests.
+    // TODO: Should the auxiliary carry be calculated with or without the carry?
+    fn wrapping_add<T>(&mut self, destination: T, source: T, with_carry: WithCarry) -> T
     where
-        T: PrimInt + CheckedAdd + WrappingAdd + AsUnsigned,
+        T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
         let result = destination.wrapping_add(&source);
+        if let WithCarry::True = with_carry {
+            let carry = self.registers.eflags.get_carry_flag() as u8;
+            let carry = FromPrimitive::from_u8(carry).unwrap();
+            result.wrapping_add(&carry);
+        }
 
-        self.registers
-            .eflags
-            .compute_carry_flag(destination, source, Operation::Add, WithCarry::No);
-        self.registers.eflags.compute_zero_flag(result);
-        self.registers.eflags.compute_sign_flag(result);
-        self.registers
-            .eflags
-            .compute_overflow_flag(destination, source, result, Operation::Add);
-        self.registers
-            .eflags
-            .compute_auxiliary_carry_flag(destination, source, Operation::Add);
-
-        result
-    }
-
-    /// Performs wrapping addition, also adding the carry flag, setting flags which can only be
-    /// known by observing the addition. These are OF, and AF.
-    /// TODO: Tests.
-    /// TODO: Should the auxiliary carry be calculated with or without the carry?
-    fn wrapping_add_with_carry<T>(&mut self, destination: T, source: T) -> T
-    where
-        T: PrimInt + CheckedAdd + WrappingAdd + FromPrimitive + AsUnsigned,
-    {
-        let carry = self.registers.eflags.get_carry_flag() as u8;
-        let carry = FromPrimitive::from_u8(carry).unwrap();
-        let result = destination.wrapping_add(&source).wrapping_add(&carry);
-
-        self.registers
-            .eflags
-            .compute_carry_flag(destination, source, Operation::Add, WithCarry::Yes);
-        self.registers.eflags.compute_zero_flag(result);
-        self.registers.eflags.compute_sign_flag(result);
         self.registers
             .eflags
             .compute_overflow_flag(destination, source, result, Operation::Add);
@@ -75,29 +50,46 @@ impl Cpu {
 
     /// Performs wrapping subtraction, settings flags which can only be known by observing the
     /// subtraction. These are OF, and AF.
-    // fn wrapping_sub<T>(&mut self, destination: T, source: T) -> T
-    // where
-    //     T: PrimInt + CheckedSub + WrappingSub,
-    // {
-    //     let result = destination.wrapping_sub(&source);
-    //
-    //     let overflowed = destination.checked_sub(&source).is_none();
-    //     self.registers.eflags.set_overflow_flag(overflowed);
-    //
-    //     let destination
-    // }
+    // TODO: Tests.
+    // TODO: Should the auxiliary carry be calculated with or without the carry?
+    fn wrapping_sub<T>(&mut self, destination: T, source: T, with_carry: WithCarry) -> T
+    where
+        T: PrimInt + WrappingSub + FromPrimitive + AsUnsigned,
+    {
+        let result = destination.wrapping_sub(&source);
+        if let WithCarry::True = with_carry {
+            let carry = self.registers.eflags.get_carry_flag() as u8;
+            let carry = FromPrimitive::from_u8(carry).unwrap();
+            result.wrapping_sub(&carry);
+        }
+
+        self.registers
+            .eflags
+            .compute_overflow_flag(destination, source, result, Operation::Add);
+        self.registers
+            .eflags
+            .compute_auxiliary_carry_flag(destination, source, Operation::Add);
+
+        result
+    }
 
     /// Add the two operands and carry together, wrapping if an overflow occurs, and set the
     /// OF, SF, ZF, AF, CF, and PF flags according to the result.
     // TODO: Tests, especially for wrapping.
     // TODO: Document flags which are set.
+    // FIXME: Remove `AsUnsigned` bound.
     fn adc<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
+        T: PrimInt + WrappingAdd + FromPrimitive + Unsigned + AsUnsigned,
     {
-        let result = self.wrapping_add_with_carry(a, b);
+        let result = self.wrapping_add(a, b, WithCarry::True);
         self.registers.eflags.compute_parity_flag(result);
-        // TODO: OF, SF, ZF, AF, CF, and PF
+        self.registers
+            .eflags
+            .compute_carry_flag(a, b, Operation::Add, WithCarry::True);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers.eflags.compute_sign_flag(result);
+        // TODO: OF, SF, ZF, AF, and PF
         result
     }
 
@@ -158,13 +150,19 @@ impl Cpu {
     /// Add the two operands together, wrapping if an overflow occurs, and set the OF, SF, ZF, AF,
     /// CF, and PF flags according to the result.
     // TODO: Tests, especially for wrapping.
+    // FIXME: Remove AsUnsigned bound.
     fn add<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + WrappingAdd + AsUnsigned,
+        T: PrimInt + WrappingAdd + FromPrimitive + Unsigned + AsUnsigned,
     {
-        let result = self.wrapping_add(a, b);
+        let result = self.wrapping_add(a, b, WithCarry::False);
         self.registers.eflags.compute_parity_flag(result);
-        // TODO: OF, SF, ZF, AF, CF, and PF
+        self.registers
+            .eflags
+            .compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers.eflags.compute_sign_flag(result);
+        // TODO: OF, SF, ZF, AF, and PF
         result
     }
 
@@ -233,7 +231,7 @@ impl Cpu {
     /// TODO: Tests.
     fn and<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + BitAnd<Output = T>,
+        T: PrimInt + BitAnd<Output = T> + FromPrimitive + Unsigned,
     {
         let result = a & b;
         self.registers.eflags.set_overflow_flag(false);
@@ -312,7 +310,7 @@ impl Cpu {
     /// TODO: Tests.
     fn or<T>(&mut self, a: T, b: T) -> T
     where
-        T: PrimInt + BitOr<T>,
+        T: PrimInt + BitOr<T> + Unsigned + FromPrimitive,
     {
         let result = a | b;
         self.registers.eflags.set_overflow_flag(false);
@@ -417,7 +415,7 @@ impl Cpu {
     /// TODO: Tests.
     fn sbb<T>(&mut self, destination: T, source: T) -> T
     where
-        T: PrimInt + FromPrimitive,
+        T: PrimInt + FromPrimitive + Unsigned,
     {
         // TODO: Implementation needs to set overflow and auxiliary carry flags.
         let carry = self.registers.eflags.get_carry_flag() as u8;
@@ -559,87 +557,87 @@ mod tests {
         let mut cpu = Cpu::default();
 
         // Decimal
-        assert_eq!(cpu.wrapping_add(127_i8, 0_i8), 127_i8);
+        assert_eq!(cpu.add(127_i8.as_unsigned(), 0_i8.as_unsigned()), 127_i8.as_unsigned());
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(-1_i8, 127_i8), 126_i8);
+        assert_eq!(cpu.add((-1_i8).as_unsigned(), 127_i8.as_unsigned()), 126_i8.as_unsigned());
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0_i8, 0_i8), 0_i8);
+        assert_eq!(cpu.add(0_i8.as_unsigned(), 0_i8.as_unsigned()), 0_i8.as_unsigned());
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
 
-        assert_eq!(cpu.wrapping_add(-1_i8, 1_i8), 0_i8);
+        assert_eq!(cpu.add((-1_i8).as_unsigned(), 1_i8.as_unsigned()), 0_i8.as_unsigned());
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(-1_i8, 0_i8), -1_i8);
+        assert_eq!(cpu.add((-1_i8).as_unsigned(), 0_i8.as_unsigned()), (-1_i8).as_unsigned());
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(-1_i8, -1_i8), -2_i8);
+        assert_eq!(cpu.add((-1_i8).as_unsigned(), (-1_i8).as_unsigned()), (-2_i8).as_unsigned());
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(-1_i8, -128_i8), 127_i8);
+        assert_eq!(cpu.add((-1_i8).as_unsigned(), (-128_i8).as_unsigned()), 127_i8.as_unsigned());
         assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(-128_i8, -128_i8), 0_i8);
+        assert_eq!(cpu.add((-128_i8).as_unsigned(), (-128_i8).as_unsigned()), 0_i8.as_unsigned());
         assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(127_i8, 127_i8), -2_i8);
+        assert_eq!(cpu.add(127_i8.as_unsigned(), 127_i8.as_unsigned()), (-2_i8).as_unsigned());
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
 
         // Unsigned decimal
-        assert_eq!(cpu.wrapping_add(127_u8, 0_u8), 127_u8);
+        assert_eq!(cpu.add(127_u8, 0_u8), 127_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(255_u8, 127_u8), 126_u8);
+        assert_eq!(cpu.add(255_u8, 127_u8), 126_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0_u8, 0_u8), 0_u8);
+        assert_eq!(cpu.add(0_u8, 0_u8), 0_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
 
-        assert_eq!(cpu.wrapping_add(255_u8, 1_u8), 0_u8);
+        assert_eq!(cpu.add(255_u8, 1_u8), 0_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(255_u8, 0_u8), 255_u8);
+        assert_eq!(cpu.add(255_u8, 0_u8), 255_u8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(255_u8, 255_u8), 254_u8);
+        assert_eq!(cpu.add(255_u8, 255_u8), 254_u8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(255_u8, 128_u8), 127_u8);
+        assert_eq!(cpu.add(255_u8, 128_u8), 127_u8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(128_u8, 128_u8), 0_u8);
+        assert_eq!(cpu.add(128_u8, 128_u8), 0_u8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(127_u8, 127_u8), 254_u8);
+        assert_eq!(cpu.add(127_u8, 127_u8), 254_u8);
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
 
         // Hexadecimal
-        assert_eq!(cpu.wrapping_add(0x7F_u8, 0x0_u8), 0x7F_u8);
+        assert_eq!(cpu.add(0x7F_u8, 0x0_u8), 0x7F_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(0xFF_u8, 0x7F_u8), 0x7E_u8);
+        assert_eq!(cpu.add(0xFF_u8, 0x7F_u8), 0x7E_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0x0_u8, 0x0_u8), 0x0_u8);
+        assert_eq!(cpu.add(0x0_u8, 0x0_u8), 0x0_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
 
-        assert_eq!(cpu.wrapping_add(0xFF_u8, 0x1_u8), 0x0_u8);
+        assert_eq!(cpu.add(0xFF_u8, 0x1_u8), 0x0_u8);
         assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0xFF_u8, 0x0_u8), 0xFF_u8);
+        assert_eq!(cpu.add(0xFF_u8, 0x0_u8), 0xFF_u8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
 
-        assert_eq!(cpu.wrapping_add(0xFF_u8, 0xFF_u8), 0xFE_u8);
+        assert_eq!(cpu.add(0xFF_u8, 0xFF_u8), 0xFE_u8);
         assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0xFF_u8, 0x80_u8), 0x7F_u8);
+        assert_eq!(cpu.add(0xFF_u8, 0x80_u8), 0x7F_u8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0x80_u8, 0x80_u8), 0x0_u8);
+        assert_eq!(cpu.add(0x80_u8, 0x80_u8), 0x0_u8);
         assert_eflags!(cpu, OF = true, SF = false, ZF = true, CF = true);
 
-        assert_eq!(cpu.wrapping_add(0x7F_u8, 0x7F_u8), 0xFE_u8);
+        assert_eq!(cpu.add(0x7F_u8, 0x7F_u8), 0xFE_u8);
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
     }
 

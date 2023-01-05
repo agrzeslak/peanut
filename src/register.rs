@@ -21,8 +21,8 @@ pub enum CurrentPrivilegeLevel {
 }
 
 pub enum WithCarry {
-    Yes,
-    No,
+    True,
+    False,
 }
 
 /// Intel manual section 3.4.3 "EFLAGS Register".
@@ -167,8 +167,8 @@ impl Eflags {
                 match a.checked_add(&b) {
                     Some(n) => match with_carry {
                         // No zeroes means that adding the carry (1), will cause it to overflow.
-                        WithCarry::Yes => n.count_zeros() == 0,
-                        WithCarry::No => false,
+                        WithCarry::True => n.count_zeros() == 0,
+                        WithCarry::False => false,
                     },
                     None => true,
                 }
@@ -177,8 +177,8 @@ impl Eflags {
                 match a.checked_sub(&b) {
                     Some(n) => match with_carry {
                         // No ones means that subtracting the carry (1), will cause it to underflow.
-                        WithCarry::Yes => n.count_ones() == 0,
-                        WithCarry::No => false,
+                        WithCarry::True => n.count_ones() == 0,
+                        WithCarry::False => false,
                     },
                     None => true,
                 }
@@ -191,9 +191,9 @@ impl Eflags {
     /// an even number of bits set to 1. Providing a value larger than u64 will panic, however this
     /// should never be the case.
     // TODO: Tests.
-    pub(crate) fn compute_parity_flag<T: PrimInt>(&mut self, result: T) {
-        let least_significant_byte = result.to_u64().unwrap().to_le_bytes()[0];
-        self.set_parity_flag(least_significant_byte % 2 == 0);
+    pub(crate) fn compute_parity_flag<T: PrimInt + Unsigned + FromPrimitive>(&mut self, result: T) {
+        let least_significant_byte = result & FromPrimitive::from_u8(0xFF).unwrap();
+        self.set_parity_flag(least_significant_byte.count_ones() % 2 == 0);
     }
 
     /// Sets the overflow flag if the signed addition (two's complement) cannot fit within the
