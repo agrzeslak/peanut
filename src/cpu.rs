@@ -28,8 +28,6 @@ impl Cpu {
     /// Performs wrapping addition, adding the carry flag if required, and setting flags which can
     /// only be known by observing the addition. These are OF, and AF. Other flags are not set and
     /// should be set separately.
-    // TODO: Tests.
-    // TODO: Should the auxiliary carry be calculated with or without the carry?
     fn wrapping_add<T>(&mut self, destination: T, source: T, with_carry: WithCarry) -> T
     where
         T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
@@ -53,8 +51,6 @@ impl Cpu {
 
     /// Performs wrapping subtraction, settings flags which can only be known by observing the
     /// subtraction. These are OF, and AF.
-    // TODO: Tests.
-    // TODO: Should the auxiliary carry be calculated with or without the carry?
     fn wrapping_sub<T>(&mut self, destination: T, source: T, with_carry: WithCarry) -> T
     where
         T: PrimInt + WrappingSub + FromPrimitive + AsUnsigned,
