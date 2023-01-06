@@ -28,11 +28,11 @@ impl Cpu {
     /// Performs wrapping addition, adding the carry flag if required, and setting flags which can
     /// only be known by observing the addition. These are OF, and AF. Other flags are not set and
     /// should be set separately.
-    fn wrapping_add<T>(&mut self, destination: T, source: T, with_carry: WithCarry) -> T
+    fn wrapping_add<T>(&mut self, lhs: T, rhs: T, with_carry: WithCarry) -> T
     where
         T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
-        let result = destination.wrapping_add(&source);
+        let result = lhs.wrapping_add(&rhs);
         if let WithCarry::True = with_carry {
             let carry = self.registers.eflags.get_carry_flag() as u8;
             let carry = FromPrimitive::from_u8(carry).unwrap();
@@ -41,21 +41,21 @@ impl Cpu {
 
         self.registers
             .eflags
-            .compute_overflow_flag(destination, source, result, Operation::Add);
+            .compute_overflow_flag(lhs, rhs, result, Operation::Add);
         self.registers
             .eflags
-            .compute_auxiliary_carry_flag(destination, source, Operation::Add);
+            .compute_auxiliary_carry_flag(lhs, rhs, Operation::Add);
 
         result
     }
 
     /// Performs wrapping subtraction, settings flags which can only be known by observing the
     /// subtraction. These are OF, and AF.
-    fn wrapping_sub<T>(&mut self, destination: T, source: T, with_carry: WithCarry) -> T
+    fn wrapping_sub<T>(&mut self, lhs: T, rhs: T, with_carry: WithCarry) -> T
     where
         T: PrimInt + WrappingSub + FromPrimitive + AsUnsigned,
     {
-        let result = destination.wrapping_sub(&source);
+        let result = lhs.wrapping_sub(&rhs);
         if let WithCarry::True = with_carry {
             let carry = self.registers.eflags.get_carry_flag() as u8;
             let carry = FromPrimitive::from_u8(carry).unwrap();
@@ -64,30 +64,27 @@ impl Cpu {
 
         self.registers
             .eflags
-            .compute_overflow_flag(destination, source, result, Operation::Add);
+            .compute_overflow_flag(lhs, rhs, result, Operation::Subtract);
         self.registers
             .eflags
-            .compute_auxiliary_carry_flag(destination, source, Operation::Add);
+            .compute_auxiliary_carry_flag(lhs, rhs, Operation::Subtract);
 
         result
     }
 
     /// Add the two operands and carry together, wrapping if an overflow occurs, and set the
     /// OF, SF, ZF, AF, CF, and PF flags according to the result.
-    // TODO: Tests, especially for wrapping.
-    // TODO: Document flags which are set.
-    fn adc<T>(&mut self, a: T, b: T) -> T
+    fn adc<T>(&mut self, lhs: T, rhs: T) -> T
     where
         T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
-        let result = self.wrapping_add(a, b, WithCarry::True);
+        let result = self.wrapping_add(lhs, rhs, WithCarry::True);
         self.registers.eflags.compute_parity_flag(result);
         self.registers
             .eflags
-            .compute_carry_flag(a, b, Operation::Add, WithCarry::True);
+            .compute_carry_flag(lhs, rhs, Operation::Add, WithCarry::True);
         self.registers.eflags.compute_zero_flag(result);
         self.registers.eflags.compute_sign_flag(result);
-        // TODO: OF, SF, ZF, AF, and PF
         result
     }
 
@@ -147,19 +144,20 @@ impl Cpu {
 
     /// Add the two operands together, wrapping if an overflow occurs, and set the OF, SF, ZF, AF,
     /// CF, and PF flags according to the result.
-    // TODO: Tests, especially for wrapping.
-    fn add<T>(&mut self, a: T, b: T) -> T
+    fn add<T>(&mut self, lhs: T, rhs: T) -> T
     where
         T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
-        let result = self.wrapping_add(a, b, WithCarry::False);
+        let result = self.wrapping_add(lhs, rhs, WithCarry::False);
         self.registers.eflags.compute_parity_flag(result);
-        self.registers
-            .eflags
-            .compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+        self.registers.eflags.compute_carry_flag(
+            lhs,
+            rhs,
+            Operation::Add,
+            WithCarry::False,
+        );
         self.registers.eflags.compute_zero_flag(result);
         self.registers.eflags.compute_sign_flag(result);
-        // TODO: OF, SF, ZF, AF, and PF
         result
     }
 
@@ -226,11 +224,11 @@ impl Cpu {
     /// Performs a bitwise AND operation. Clears the OF and CF flags, and sets the SF, ZF, and PF
     /// flags depending on the result. The state of the AF flag is undefined.
     /// TODO: Tests.
-    fn and<T>(&mut self, a: T, b: T) -> T
+    fn and<T>(&mut self, lhs: T, rhs: T) -> T
     where
         T: PrimInt + BitAnd<Output = T> + AsUnsigned + FromPrimitive,
     {
-        let result = a & b;
+        let result = lhs & rhs;
         self.registers.eflags.set_overflow_flag(false);
         self.registers.eflags.set_carry_flag(false);
         self.registers.eflags.compute_sign_flag(result);
@@ -305,11 +303,11 @@ impl Cpu {
     /// Performs a bitwise inclusive OR operation. The OF and CF flags are cleared, and the SF, ZF,
     /// and PF flags are set according to the result. The AF flag is undefined.
     /// TODO: Tests.
-    fn or<T>(&mut self, a: T, b: T) -> T
+    fn or<T>(&mut self, lhs: T, rhs: T) -> T
     where
         T: PrimInt + BitOr<T> + AsUnsigned + FromPrimitive,
     {
-        let result = a | b;
+        let result = lhs | rhs;
         self.registers.eflags.set_overflow_flag(false);
         self.registers.eflags.set_carry_flag(false);
         self.registers.eflags.compute_sign_flag(result);
@@ -409,17 +407,21 @@ impl Cpu {
     /// Integer subtraction with borrow. Adds the source and the carry flag, and subtracts the
     /// result from the destination. Sets the OF, SF, ZF, AF, PF, and CF flags according to the
     /// result.
-    /// TODO: Tests.
-    fn sbb<T>(&mut self, destination: T, source: T) -> T
+    // TODO: Test
+    fn sbb<T>(&mut self, lhs: T, rhs: T) -> T
     where
-        T: PrimInt + AsUnsigned + FromPrimitive,
+        T: PrimInt + WrappingSub + AsUnsigned + FromPrimitive,
     {
-        // TODO: Implementation needs to set overflow and auxiliary carry flags.
-        let carry = self.registers.eflags.get_carry_flag() as u8;
-        let result = destination - (source + T::from_u8(carry).unwrap());
-        self.registers.eflags.compute_sign_flag(result);
-        self.registers.eflags.compute_zero_flag(result);
+        let result = self.wrapping_sub(lhs, rhs, WithCarry::True);
         self.registers.eflags.compute_parity_flag(result);
+        self.registers.eflags.compute_carry_flag(
+            lhs,
+            rhs,
+            Operation::Subtract,
+            WithCarry::True,
+        );
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers.eflags.compute_sign_flag(result);
         result
     }
 
@@ -467,6 +469,26 @@ impl Cpu {
         let (rm32, reg32) = unwrap_operands!(instruction, RegisterOrMemory32, &Register32);
         todo!()
     }
+
+    /// Integer subtraction. Adds the source and the carry flag, and subtracts the result from the
+    /// destination. Sets the OF, SF, ZF, AF, PF, and CF flags according to the result.
+    fn sub<T>(&mut self, lhs: T, rhs: T) -> T
+    where
+        T: PrimInt + WrappingSub + AsUnsigned + FromPrimitive,
+    {
+        let result = self.wrapping_sub(lhs, rhs, WithCarry::False);
+        self.registers.eflags.compute_parity_flag(result);
+        self.registers.eflags.compute_carry_flag(
+            lhs,
+            rhs,
+            Operation::Subtract,
+            WithCarry::False,
+        );
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers.eflags.compute_sign_flag(result);
+        result
+    }
+
 
     pub(crate) fn sub_al_imm8(&mut self, instruction: &Instruction) {
         let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);
@@ -536,6 +558,7 @@ mod tests {
         };
     }
 
+    // https://stackoverflow.com/questions/8965923/carry-overflow-subtraction-in-x86#8982549
     //       A                   B                   A + B              Flags
     // ---------------     ----------------    ---------------      -----------------
     // h  |  ud  |   d   | h  |  ud  |   d   | h  |  ud  |   d   | OF | SF | ZF | CF
@@ -638,6 +661,7 @@ mod tests {
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = false);
     }
 
+    // https://stackoverflow.com/questions/8965923/carry-overflow-subtraction-in-x86#8982549
     //       A                   B                   A - B              Flags
     // ---------------     ----------------    ---------------      -----------------
     // h  |  ud  |   d   | h  |  ud  |   d   | h  |  ud  |   d   || OF | SF | ZF | CF
@@ -650,5 +674,73 @@ mod tests {
     // FE | 254  |  -2   | 7F | 127  |  127  | 7F | 127  |  127  || 1  | 0  | 0  | 0
     // 7F | 127  |  127  | FF | 255  |  -1   | 80 | 128  | -128  || 1  | 1  | 0  | 1
     #[test]
-    fn sub() {}
+    fn sub() {
+        let mut cpu = Cpu::default();
+
+        // Decimal
+        assert_eq!(cpu.sub(-1_i8, -2_i8), 1_i8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(126_i8, -1_i8), 127_i8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.sub(-1_i8, -1_i8), 0_i8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
+
+        assert_eq!(cpu.sub(-1_i8, 127_i8), -128_i8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(-2_i8, -1_i8), -1_i8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
+
+        assert_eq!(cpu.sub(-2_i8, 127_i8), 127_i8);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(127_i8, -1_i8), -128_i8);
+        assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = true);
+
+        // Unsigned decimal
+        assert_eq!(cpu.sub(255_u8, 254_u8), 1_u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(126_u8, 255_u8), 127_u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.sub(255_u8, 255_u8), 0_u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
+
+        assert_eq!(cpu.sub(255_u8, 127_u8), 128_u8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(254_u8, 255_u8), 255_u8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
+
+        assert_eq!(cpu.sub(254_u8, 127_u8), 127_u8);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(127_u8, 255_u8), 128_u8);
+        assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = true);
+
+        // Hexadecimal
+        assert_eq!(cpu.sub(0xFF_u8, 0xFE_u8), 0x1_u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(0x7E_u8, 0xFF_u8), 0x7F_u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = false, CF = true);
+
+        assert_eq!(cpu.sub(0xFF_u8, 0xFF_u8), 0x0_u8);
+        assert_eflags!(cpu, OF = false, SF = false, ZF = true, CF = false);
+
+        assert_eq!(cpu.sub(0xFF_u8, 0x7F_u8), 0x80_u8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(0xFE_u8, 0xFF_u8), 0xFF_u8);
+        assert_eflags!(cpu, OF = false, SF = true, ZF = false, CF = true);
+
+        assert_eq!(cpu.sub(0xFE_u8, 0x7F_u8), 0x7F_u8);
+        assert_eflags!(cpu, OF = true, SF = false, ZF = false, CF = false);
+
+        assert_eq!(cpu.sub(0x7F_u8, 0xFF_u8), 0x80_u8);
+        assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = true);
+    }
 }
