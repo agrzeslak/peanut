@@ -215,15 +215,25 @@ impl Eflags {
     }
 
     /// Sets the auxiliary carry flag if a carry or borrow is generated out of the 3rd bit.
-    // FIXME: Addition is wrong. Should also generate a carry if one of the bits at index 3 are
-    //        set, and there is a carry from a lower index into them.
     pub(crate) fn compute_auxiliary_carry_flag<T>(&mut self, a: T, b: T, operation: Operation)
     where
-        T: PrimInt,
+        T: PrimInt + FromPrimitive + AsUnsigned,
     {
+        let a = a.as_unsigned();
+        let b = b.as_unsigned();
+        let a_lower_nibble = a & FromPrimitive::from_u8(0xf).unwrap();
+        let b_lower_nibble = b & FromPrimitive::from_u8(0xf).unwrap();
+
         let carried = match operation {
-            Operation::Add => a.bit_at_index(3) && b.bit_at_index(3),
-            Operation::Subtract => todo!(),
+            Operation::Add => a_lower_nibble
+                .checked_add(&b_lower_nibble)
+                .unwrap()
+                .bit_at_index(4),
+            // If a borrow is generated into the lowest nibble, that means that the subtraction
+            // would underflow without the borrow. For subtraction to underflow, this means that
+            // b's lowest nibble is greater than a's.
+            // TODO: Verify this is correct and adjust tests if not.
+            Operation::Subtract => b_lower_nibble.gt(&a_lower_nibble),
         };
         self.set_auxiliary_carry_flag(carried);
     }
@@ -891,5 +901,104 @@ mod tests {
     #[test]
     fn edx_get_and_set() {
         test_abcd_register_accessors!(d);
+    }
+
+    #[test]
+    fn auxiliary_carry_flag_add() {
+        let mut registers = Registers::default();
+
+        //   0000 1111
+        // + 0000 0001
+        //   ---------
+        //   0001 0000 (AF = true)
+        registers.eflags.compute_auxiliary_carry_flag(
+            0b0000_1111_u8,
+            0b0000_0001_u8,
+            Operation::Add,
+        );
+        assert!(registers.eflags.get_auxiliary_carry_flag());
+
+        //   0000 1110
+        // + 0000 0001
+        //   ---------
+        //   0000 1111 (AF = false)
+        registers.eflags.compute_auxiliary_carry_flag(
+            0b0000_1110_u8,
+            0b0000_0001_u8,
+            Operation::Add,
+        );
+        assert!(!registers.eflags.get_auxiliary_carry_flag());
+
+        //   1110 1111
+        // + 1111 0001
+        //   ---------
+        //   1100 0000 (AF = true)
+        registers.eflags.compute_auxiliary_carry_flag(
+            0b1110_1111_u8,
+            0b1111_0001_u8,
+            Operation::Add,
+        );
+        assert!(registers.eflags.get_auxiliary_carry_flag());
+    }
+
+    #[test]
+    fn auxiliary_carry_flag_subtract() {
+        let mut registers = Registers::default();
+
+        //   0001 0000
+        // - 0000 1000
+        //   ---------
+        //   0000 1000 (AF = true)
+        registers.eflags.compute_auxiliary_carry_flag(
+            0b0001_0000_u8,
+            0b0000_1000_u8,
+            Operation::Subtract,
+        );
+        assert!(registers.eflags.get_auxiliary_carry_flag());
+
+        //   0010 0000
+        // - 0000 1100
+        //   ---- ----
+        //   0001 0100 (AF = true)
+        registers.eflags.compute_auxiliary_carry_flag(
+            0b0010_0000_u8,
+            0b0000_1100_u8,
+            Operation::Subtract,
+        );
+        assert!(registers.eflags.get_auxiliary_carry_flag());
+
+        //   0000 0000
+        // - 0000 0001
+        //   ---- ----
+        //   1111 1111 (AF = true)
+        //   TODO: Verify that this should indeed set AF.
+        registers.eflags.compute_auxiliary_carry_flag(
+            0b0000_0000_u8,
+            0b0000_0001_u8,
+            Operation::Subtract,
+        );
+        assert!(registers.eflags.get_auxiliary_carry_flag());
+
+        //   0000 0001
+        // - 0000 0000
+        //   ---- ----
+        //   0000 0001 (AF = false)
+        registers.eflags.compute_auxiliary_carry_flag(
+            0b0000_0001_u8,
+            0b0000_0000_u8,
+            Operation::Subtract,
+        );
+        assert!(!registers.eflags.get_auxiliary_carry_flag());
+
+        //   0001 1000
+        // - 0000 1000
+        //   ---- ----
+        //   0001 0000 (AF = false)
+        registers.eflags.compute_auxiliary_carry_flag(
+            0b0001_1000_u8,
+            0b0001_0000_u8,
+            Operation::Subtract,
+        );
+        assert!(!registers.eflags.get_auxiliary_carry_flag());
     }
 }

@@ -152,7 +152,6 @@ impl Cpu {
     /// Add the two operands together, wrapping if an overflow occurs, and set the OF, SF, ZF, AF,
     /// CF, and PF flags according to the result.
     // TODO: Tests, especially for wrapping.
-    // FIXME: Remove AsUnsigned bound.
     fn add<T>(&mut self, a: T, b: T) -> T
     where
         T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
