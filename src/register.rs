@@ -239,7 +239,6 @@ impl Eflags {
     }
 
     /// Sets the zero flag if the result is 0.
-    // TODO: Tests.
     pub(crate) fn compute_zero_flag<T: PrimInt>(&mut self, result: T) {
         self.set_zero_flag(result.count_ones() == 0);
     }
@@ -971,7 +970,6 @@ mod tests {
         // - 0000 0001
         //   ---- ----
         //   1111 1111 (AF = true)
-        //   TODO: Verify that this should indeed set AF.
         registers.eflags.compute_auxiliary_carry_flag(
             0b0000_0000_u8,
             0b0000_0001_u8,
@@ -1000,5 +998,18 @@ mod tests {
             Operation::Subtract,
         );
         assert!(!registers.eflags.get_auxiliary_carry_flag());
+    }
+
+    #[test]
+    fn zero_flag() {
+        let mut registers = Registers::default();
+        registers.eflags.compute_zero_flag(0_u8);
+        assert!(registers.eflags.get_zero_flag());
+        registers.eflags.compute_zero_flag(-0_i8);
+        assert!(registers.eflags.get_zero_flag());
+        registers.eflags.compute_zero_flag(1_u8);
+        assert!(!registers.eflags.get_zero_flag());
+        registers.eflags.compute_zero_flag(-1_i8);
+        assert!(!registers.eflags.get_zero_flag());
     }
 }
