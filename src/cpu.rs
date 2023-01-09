@@ -9,8 +9,8 @@ use crate::{
         unwrap_operands, Immediate, Instruction, RegisterOrMemory16, RegisterOrMemory32,
         RegisterOrMemory8,
     },
-    register::{Register16, Register32, Register8, Registers, WithCarry},
-    traits::AsUnsigned,
+    register::{Register16, Register32, Register8, Eflags, WithCarry, Registers},
+    traits::{AsUnsigned, AsSigned},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -673,6 +673,7 @@ mod tests {
     // FE | 254  |  -2   | FF | 255  |  -1   | FF | 255  |  -1   || 0  | 1  | 0  | 1
     // FE | 254  |  -2   | 7F | 127  |  127  | 7F | 127  |  127  || 1  | 0  | 0  | 0
     // 7F | 127  |  127  | FF | 255  |  -1   | 80 | 128  | -128  || 1  | 1  | 0  | 1
+    // TODO: Why can't you have the other flag combinations e.g. OF + ZF?
     #[test]
     fn sub() {
         let mut cpu = Cpu::default();

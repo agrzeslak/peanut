@@ -121,9 +121,76 @@ impl_as_unsigned!(i64, u64);
 impl_as_unsigned!(i128, u128);
 impl_as_unsigned!(isize, usize);
 
+pub(crate) trait AsSigned {
+    type Signed: PrimInt + FromPrimitive + Signed;
+
+    fn as_signed(self) -> Self::Signed;
+}
+
+macro_rules! impl_as_signed {
+    ($unsigned:ty, $signed:ty) => {
+        impl AsSigned for $unsigned {
+            type Signed = $signed;
+
+            fn as_signed(self) -> Self::Signed {
+                self as $signed
+            }
+        }
+    };
+    ($signed:ty) => {
+        impl AsSigned for $signed {
+            type Signed = Self;
+
+            fn as_signed(self) -> Self::Signed {
+                self
+            }
+        }
+    }
+}
+
+impl_as_signed!(i8);
+impl_as_signed!(i16);
+impl_as_signed!(i32);
+impl_as_signed!(i64);
+impl_as_signed!(i128);
+impl_as_signed!(isize);
+
+impl_as_signed!(u8, i8);
+impl_as_signed!(u16, i16);
+impl_as_signed!(u32, i32);
+impl_as_signed!(u64, i64);
+impl_as_signed!(u128, i128);
+impl_as_signed!(usize, isize);
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    macro_rules! test_as_signed {
+        ($source_type:ty, $target_type:ty) => {
+            let value: $source_type = 0;
+            assert_eq!(value as $target_type, value.as_signed());
+            let value = <$source_type>::MIN;
+            assert_eq!(value as $target_type, value.as_signed());
+            let value = <$source_type>::MAX;
+            assert_eq!(value as $target_type, value.as_signed());
+        };
+    }
+
+
+    #[test]
+    fn as_signed() {
+        test_as_signed!(i8, i8);
+        test_as_signed!(u8, i8);
+        test_as_signed!(i16, i16);
+        test_as_signed!(u16, i16);
+        test_as_signed!(i32, i32);
+        test_as_signed!(u32, i32);
+        test_as_signed!(i64, i64);
+        test_as_signed!(u64, i64);
+        test_as_signed!(i128, i128);
+        test_as_signed!(u128, i128);
+    }
 
     macro_rules! test_as_unsigned {
         ($source_type:ty, $target_type:ty) => {

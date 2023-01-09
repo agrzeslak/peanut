@@ -188,9 +188,7 @@ impl Eflags {
     }
 
     /// Sets the parity flag if the least significant byte of the result of the last operation has
-    /// an even number of bits set to 1. Providing a value larger than u64 will panic, however this
-    /// should never be the case.
-    // TODO: Tests.
+    /// an even number of bits set to 1.
     pub(crate) fn compute_parity_flag<T: PrimInt + AsUnsigned + FromPrimitive>(
         &mut self,
         result: T,
@@ -202,7 +200,10 @@ impl Eflags {
     /// Sets the overflow flag if the signed addition (two's complement) cannot fit within the
     /// number of bits. I.e. if two operands of the same sign are added, or two operands of
     /// opposite sign are subtracted and a result of different sign is produced.
-    // TODO: Tests.
+    // FIXME: Perhaps we can implement an `AsSigned` trait and do this the same way we did
+    //        `compute_carry_flag`, in that we don't need to be passed a result, but simultaneously
+    //        also don't need to place a `WrappingAdd + WrappingSub` trait bound.
+    // FIXME: Should also consider carry.
     pub(crate) fn compute_overflow_flag<T>(&mut self, a: T, b: T, result: T, operation: Operation)
     where
         T: PrimInt,
@@ -902,114 +903,289 @@ mod tests {
         test_abcd_register_accessors!(d);
     }
 
-    #[test]
-    fn auxiliary_carry_flag_add() {
-        let mut registers = Registers::default();
+    mod eflags {
+        use super::*;
 
-        //   0000 1111
-        // + 0000 0001
-        //   ---------
-        //   0001 0000 (AF = true)
-        registers.eflags.compute_auxiliary_carry_flag(
-            0b0000_1111_u8,
-            0b0000_0001_u8,
-            Operation::Add,
-        );
-        assert!(registers.eflags.get_auxiliary_carry_flag());
+        #[test]
+        fn carry_flag() {
+            let mut eflags = Eflags::default();
 
-        //   0000 1110
-        // + 0000 0001
-        //   ---------
-        //   0000 1111 (AF = false)
-        registers.eflags.compute_auxiliary_carry_flag(
-            0b0000_1110_u8,
-            0b0000_0001_u8,
-            Operation::Add,
-        );
-        assert!(!registers.eflags.get_auxiliary_carry_flag());
+            let a = u8::MAX;
+            let b = 1_u8;
+            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+            assert!(eflags.get_carry_flag());
 
-        //   1110 1111
-        // + 1111 0001
-        //   ---------
-        //   1100 0000 (AF = true)
-        registers.eflags.compute_auxiliary_carry_flag(
-            0b1110_1111_u8,
-            0b1111_0001_u8,
-            Operation::Add,
-        );
-        assert!(registers.eflags.get_auxiliary_carry_flag());
-    }
+            let a = u8::MAX as i8;
+            let b = 1_u8 as i8;
+            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+            assert!(eflags.get_carry_flag());
 
-    #[test]
-    fn auxiliary_carry_flag_subtract() {
-        let mut registers = Registers::default();
+            let a = u8::MAX as i8 - 1;
+            let b = 1_u8 as i8;
+            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::True);
+            assert!(eflags.get_carry_flag());
 
-        //   0001 0000
-        // - 0000 1000
-        //   ---------
-        //   0000 1000 (AF = true)
-        registers.eflags.compute_auxiliary_carry_flag(
-            0b0001_0000_u8,
-            0b0000_1000_u8,
-            Operation::Subtract,
-        );
-        assert!(registers.eflags.get_auxiliary_carry_flag());
+            let a = u8::MAX - 1;
+            let b = 1_u8;
+            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+            assert!(!eflags.get_carry_flag());
 
-        //   0010 0000
-        // - 0000 1100
-        //   ---- ----
-        //   0001 0100 (AF = true)
-        registers.eflags.compute_auxiliary_carry_flag(
-            0b0010_0000_u8,
-            0b0000_1100_u8,
-            Operation::Subtract,
-        );
-        assert!(registers.eflags.get_auxiliary_carry_flag());
+            let a = u8::MAX - 1;
+            let b = 1_u8;
+            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::True);
+            assert!(eflags.get_carry_flag());
 
-        //   0000 0000
-        // - 0000 0001
-        //   ---- ----
-        //   1111 1111 (AF = true)
-        registers.eflags.compute_auxiliary_carry_flag(
-            0b0000_0000_u8,
-            0b0000_0001_u8,
-            Operation::Subtract,
-        );
-        assert!(registers.eflags.get_auxiliary_carry_flag());
+            let a = (u8::MAX - 1) as i8;
+            let b = 1_u8 as i8;
+            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+            assert!(!eflags.get_carry_flag());
 
-        //   0000 0001
-        // - 0000 0000
-        //   ---- ----
-        //   0000 0001 (AF = false)
-        registers.eflags.compute_auxiliary_carry_flag(
-            0b0000_0001_u8,
-            0b0000_0000_u8,
-            Operation::Subtract,
-        );
-        assert!(!registers.eflags.get_auxiliary_carry_flag());
+            let a = (u8::MAX - 1) as i8;
+            let b = 1_u8 as i8;
+            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::True);
+            assert!(eflags.get_carry_flag());
 
-        //   0001 1000
-        // - 0000 1000
-        //   ---- ----
-        //   0001 0000 (AF = false)
-        registers.eflags.compute_auxiliary_carry_flag(
-            0b0001_1000_u8,
-            0b0001_0000_u8,
-            Operation::Subtract,
-        );
-        assert!(!registers.eflags.get_auxiliary_carry_flag());
-    }
+            let a = u8::MIN;
+            let b = 1_u8;
+            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::False);
+            assert!(eflags.get_carry_flag());
 
-    #[test]
-    fn zero_flag() {
-        let mut registers = Registers::default();
-        registers.eflags.compute_zero_flag(0_u8);
-        assert!(registers.eflags.get_zero_flag());
-        registers.eflags.compute_zero_flag(-0_i8);
-        assert!(registers.eflags.get_zero_flag());
-        registers.eflags.compute_zero_flag(1_u8);
-        assert!(!registers.eflags.get_zero_flag());
-        registers.eflags.compute_zero_flag(-1_i8);
-        assert!(!registers.eflags.get_zero_flag());
+            let a = u8::MIN as i8;
+            let b = 1_u8 as i8;
+            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::False);
+            assert!(eflags.get_carry_flag());
+
+            let a = u8::MIN + 1;
+            let b = 1_u8;
+            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::False);
+            assert!(!eflags.get_carry_flag());
+
+            let a = u8::MIN + 1;
+            let b = 1_u8;
+            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::True);
+            assert!(eflags.get_carry_flag());
+
+            let a = (u8::MIN + 1) as i8;
+            let b = 1_u8 as i8;
+            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::False);
+            assert!(!eflags.get_carry_flag());
+
+            let a = (u8::MIN + 1) as i8;
+            let b = 1_u8 as i8;
+            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::True);
+            assert!(eflags.get_carry_flag());
+        }
+
+        #[test]
+        fn parity_flag() {
+            let mut eflags = Eflags::default();
+
+            eflags.compute_parity_flag(0b0000_1111_u8);
+            assert!(eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b1111_0000_u8);
+            assert!(eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b0101_0101_u8);
+            assert!(eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b1100_0011_u8);
+            assert!(eflags.get_parity_flag());
+
+            eflags.compute_parity_flag(0b0000_1111_u8 as i8);
+            assert!(eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b1111_0000_u8 as i8);
+            assert!(eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b0101_0101_u8 as i8);
+            assert!(eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b1100_0011_u8 as i8);
+            assert!(eflags.get_parity_flag());
+
+            eflags.compute_parity_flag(0b1111_1111_0000_0000_u16);
+            assert!(eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b1111_1111_0000_0001_u16);
+            assert!(!eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b1111_0000_1000_0000_u16);
+            assert!(!eflags.get_parity_flag());
+
+            eflags.compute_parity_flag(0b1111_1111_0000_0000_u16 as i32);
+            assert!(eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b1111_1111_0000_0001_u16 as i32);
+            assert!(!eflags.get_parity_flag());
+            eflags.compute_parity_flag(0b1111_0000_1000_0000_u16 as i32);
+            assert!(!eflags.get_parity_flag());
+        }
+
+        #[test]
+        fn overflow_flag() {
+            let mut eflags = Eflags::default();
+
+            let a = i8::MAX;
+            let b = 1_i8;
+            eflags.compute_overflow_flag(a, b, a.wrapping_add(b), Operation::Add);
+            assert!(eflags.get_overflow_flag());
+
+            let a = i8::MAX as u8;
+            let b = 1_i8 as u8;
+            eflags.compute_overflow_flag(a, b, a.wrapping_add(b), Operation::Add);
+            assert!(eflags.get_overflow_flag());
+
+            let a = i8::MAX - 1;
+            let b = 1_i8;
+            eflags.compute_overflow_flag(a, b, a.wrapping_add(b), Operation::Add);
+            assert!(!eflags.get_overflow_flag());
+
+            let a = (i8::MAX - 1) as u8;
+            let b = 1_i8 as u8;
+            eflags.compute_overflow_flag(a, b, a.wrapping_add(b), Operation::Add);
+            assert!(!eflags.get_overflow_flag());
+
+            let a = i8::MIN;
+            let b = 1_i8;
+            eflags.compute_overflow_flag(a, b, a.wrapping_sub(b), Operation::Subtract);
+            assert!(eflags.get_overflow_flag());
+
+            let a = i8::MIN as u8;
+            let b = 1_i8 as u8;
+            eflags.compute_overflow_flag(a, b, a.wrapping_sub(b), Operation::Subtract);
+            assert!(eflags.get_overflow_flag());
+
+            let a = i8::MIN + 1;
+            let b = 1_i8;
+            eflags.compute_overflow_flag(a, b, a.wrapping_sub(b), Operation::Subtract);
+            assert!(!eflags.get_overflow_flag());
+
+            let a = (i8::MIN + 1) as u8;
+            let b = 1_i8 as u8;
+            eflags.compute_overflow_flag(a, b, a.wrapping_sub(b), Operation::Subtract);
+            assert!(!eflags.get_overflow_flag());
+        }
+
+        #[test]
+        fn auxiliary_carry_flag_add() {
+            let mut eflags = Eflags::default();
+
+            //   0000 1111
+            // + 0000 0001
+            //   ---------
+            //   0001 0000 (AF = true)
+            eflags.compute_auxiliary_carry_flag(
+                0b0000_1111_u8,
+                0b0000_0001_u8,
+                Operation::Add,
+            );
+            assert!(eflags.get_auxiliary_carry_flag());
+
+            //   0000 1110
+            // + 0000 0001
+            //   ---------
+            //   0000 1111 (AF = false)
+            eflags.compute_auxiliary_carry_flag(
+                0b0000_1110_u8,
+                0b0000_0001_u8,
+                Operation::Add,
+            );
+            assert!(!eflags.get_auxiliary_carry_flag());
+
+            //   1110 1111
+            // + 1111 0001
+            //   ---------
+            //   1100 0000 (AF = true)
+            eflags.compute_auxiliary_carry_flag(
+                0b1110_1111_u8,
+                0b1111_0001_u8,
+                Operation::Add,
+            );
+            assert!(eflags.get_auxiliary_carry_flag());
+        }
+
+        #[test]
+        fn auxiliary_carry_flag_subtract() {
+            let mut eflags = Eflags::default();
+
+            //   0001 0000
+            // - 0000 1000
+            //   ---------
+            //   0000 1000 (AF = true)
+            eflags.compute_auxiliary_carry_flag(
+                0b0001_0000_u8,
+                0b0000_1000_u8,
+                Operation::Subtract,
+            );
+            assert!(eflags.get_auxiliary_carry_flag());
+
+            //   0010 0000
+            // - 0000 1100
+            //   ---- ----
+            //   0001 0100 (AF = true)
+            eflags.compute_auxiliary_carry_flag(
+                0b0010_0000_u8,
+                0b0000_1100_u8,
+                Operation::Subtract,
+            );
+            assert!(eflags.get_auxiliary_carry_flag());
+
+            //   0000 0000
+            // - 0000 0001
+            //   ---- ----
+            //   1111 1111 (AF = true)
+            eflags.compute_auxiliary_carry_flag(
+                0b0000_0000_u8,
+                0b0000_0001_u8,
+                Operation::Subtract,
+            );
+            assert!(eflags.get_auxiliary_carry_flag());
+
+            //   0000 0001
+            // - 0000 0000
+            //   ---- ----
+            //   0000 0001 (AF = false)
+            eflags.compute_auxiliary_carry_flag(
+                0b0000_0001_u8,
+                0b0000_0000_u8,
+                Operation::Subtract,
+            );
+            assert!(!eflags.get_auxiliary_carry_flag());
+
+            //   0001 1000
+            // - 0000 1000
+            //   ---- ----
+            //   0001 0000 (AF = false)
+            eflags.compute_auxiliary_carry_flag(
+                0b0001_1000_u8,
+                0b0001_0000_u8,
+                Operation::Subtract,
+            );
+            assert!(!eflags.get_auxiliary_carry_flag());
+        }
+
+        #[test]
+        fn zero_flag() {
+            let mut eflags = Eflags::default();
+            eflags.compute_zero_flag(0_u8);
+            assert!(eflags.get_zero_flag());
+            eflags.compute_zero_flag(-0_i8);
+            assert!(eflags.get_zero_flag());
+            eflags.compute_zero_flag(1_u8);
+            assert!(!eflags.get_zero_flag());
+            eflags.compute_zero_flag(-1_i8);
+            assert!(!eflags.get_zero_flag());
+        }
+
+        #[test]
+        fn sign_flag() {
+            let mut eflags = Eflags::default();
+
+            eflags.compute_sign_flag(0_i8);
+            assert!(!eflags.get_sign_flag());
+            eflags.compute_sign_flag(-0_i8);
+            assert!(!eflags.get_sign_flag());
+            eflags.compute_sign_flag(-1_i8);
+            assert!(eflags.get_sign_flag());
+
+            eflags.compute_sign_flag(0_i8 as u8);
+            assert!(!eflags.get_sign_flag());
+            eflags.compute_sign_flag(-0_i8 as u8);
+            assert!(!eflags.get_sign_flag());
+            eflags.compute_sign_flag(-1_i8 as u8);
+            assert!(eflags.get_sign_flag());
+        }
     }
 }
