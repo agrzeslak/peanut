@@ -82,7 +82,7 @@ impl Cpu {
         self.registers.eflags.compute_parity_flag(result);
         self.registers
             .eflags
-            .compute_carry_flag(lhs, rhs, Operation::Add, WithCarry::True);
+            .compute_carry_flag(lhs, rhs, result, Operation::Add);
         self.registers.eflags.compute_zero_flag(result);
         self.registers.eflags.compute_sign_flag(result);
         result
@@ -153,8 +153,8 @@ impl Cpu {
         self.registers.eflags.compute_carry_flag(
             lhs,
             rhs,
+            result,
             Operation::Add,
-            WithCarry::False,
         );
         self.registers.eflags.compute_zero_flag(result);
         self.registers.eflags.compute_sign_flag(result);
@@ -417,8 +417,8 @@ impl Cpu {
         self.registers.eflags.compute_carry_flag(
             lhs,
             rhs,
+            result,
             Operation::Subtract,
-            WithCarry::True,
         );
         self.registers.eflags.compute_zero_flag(result);
         self.registers.eflags.compute_sign_flag(result);
@@ -481,8 +481,8 @@ impl Cpu {
         self.registers.eflags.compute_carry_flag(
             lhs,
             rhs,
+            result,
             Operation::Subtract,
-            WithCarry::False,
         );
         self.registers.eflags.compute_zero_flag(result);
         self.registers.eflags.compute_sign_flag(result);

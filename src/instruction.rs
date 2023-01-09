@@ -100,11 +100,6 @@ impl InstructionOperandFormat {
     /// Checks whether the `InstructionOperandFormat` is compatible with the operands provided.
     /// I.e. can an instruction with this `InstructionOperandFormat` be executed on the operands
     /// provided.
-    /// FIXME: I think we are currently too lax in what we allow. I think an operand format such as
-    ///        Mem32Imm32 would require that the immediate operand have a size directive. This may
-    ///        not be true and we currently don't enforce it (i.e. if we can use the immediate value
-    ///        as the desired size without overflowing, we do so silently). We do, however, fail
-    ///        with an error if which instruction we are to choose is ambiguous.
     pub fn matches(&self, operands: &Vec<Operand>) -> bool {
         // Validates that the operand is the correct immediate value.
         let validate_const = |operand: &Operand, target: i64| -> bool {
@@ -1142,6 +1137,7 @@ impl TryFrom<OperandType> for EffectiveAddress {
 
 // FIXME: Should likely have Immediate8/16/32 variants in order to enforce sizes when executing
 //        instructions.
+// FIXME: This should really be unsigned.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Immediate {
     raw: String,

@@ -2,7 +2,7 @@ use std::{fmt::Display, mem, u32};
 
 use bitmaps::Bitmap;
 use num_traits::{
-    CheckedAdd, CheckedSub, FromPrimitive, PrimInt, Unsigned, WrappingAdd, WrappingSub,
+    CheckedAdd, CheckedSub, FromPrimitive, PrimInt, Unsigned, WrappingAdd, WrappingSub, Zero,
 };
 use paste::paste;
 
@@ -151,38 +151,18 @@ impl Eflags {
     /// carry/borrow. For the purposes of computing the carry flag, we are only interested in
     /// unsigned integer addition, hence that bound has been added. If a signed integer was
     /// provided, an incorrect value would be produced.
-    pub(crate) fn compute_carry_flag<T>(
-        &mut self,
-        a: T,
-        b: T,
-        operation: Operation,
-        with_carry: WithCarry,
-    ) where
+    pub(crate) fn compute_carry_flag<T>(&mut self, a: T, b: T, result: T, operation: Operation)
+    where
         T: PrimInt + AsUnsigned,
     {
         let a = a.as_unsigned();
         let b = b.as_unsigned();
+        let result = result.as_unsigned();
         let carried = match operation {
             Operation::Add => {
-                match a.checked_add(&b) {
-                    Some(n) => match with_carry {
-                        // No zeroes means that adding the carry (1), will cause it to overflow.
-                        WithCarry::True => n.count_zeros() == 0,
-                        WithCarry::False => false,
-                    },
-                    None => true,
-                }
+                result < a.max(b) || ((result == a.max(b)) && !(a.is_zero() || b.is_zero()))
             }
-            Operation::Subtract => {
-                match a.checked_sub(&b) {
-                    Some(n) => match with_carry {
-                        // No ones means that subtracting the carry (1), will cause it to underflow.
-                        WithCarry::True => n.count_ones() == 0,
-                        WithCarry::False => false,
-                    },
-                    None => true,
-                }
-            }
+            Operation::Subtract => result > a || ((result == a) && (b.is_zero())),
         };
         self.set_carry_flag(carried);
     }
@@ -200,10 +180,6 @@ impl Eflags {
     /// Sets the overflow flag if the signed addition (two's complement) cannot fit within the
     /// number of bits. I.e. if two operands of the same sign are added, or two operands of
     /// opposite sign are subtracted and a result of different sign is produced.
-    // FIXME: Perhaps we can implement an `AsSigned` trait and do this the same way we did
-    //        `compute_carry_flag`, in that we don't need to be passed a result, but simultaneously
-    //        also don't need to place a `WrappingAdd + WrappingSub` trait bound.
-    // FIXME: Should also consider carry.
     pub(crate) fn compute_overflow_flag<T>(&mut self, a: T, b: T, result: T, operation: Operation)
     where
         T: PrimInt,
@@ -912,67 +888,80 @@ mod tests {
 
             let a = u8::MAX;
             let b = 1_u8;
-            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+            let result = a.wrapping_add(b);
+            eflags.compute_carry_flag(a, b, result, Operation::Add);
             assert!(eflags.get_carry_flag());
 
             let a = u8::MAX as i8;
             let b = 1_u8 as i8;
-            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+            let result = a.wrapping_add(b);
+            eflags.compute_carry_flag(a, b, result, Operation::Add);
             assert!(eflags.get_carry_flag());
 
             let a = u8::MAX as i8 - 1;
             let b = 1_u8 as i8;
-            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::True);
+            let result = a.wrapping_add(b).wrapping_add(1);
+            eflags.compute_carry_flag(a, b, result, Operation::Add);
             assert!(eflags.get_carry_flag());
 
             let a = u8::MAX - 1;
             let b = 1_u8;
-            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+            let result = a.wrapping_add(b);
+            eflags.compute_carry_flag(a, b, result, Operation::Add);
             assert!(!eflags.get_carry_flag());
 
             let a = u8::MAX - 1;
             let b = 1_u8;
-            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::True);
+            let result = a.wrapping_add(b).wrapping_add(1);
+            eflags.compute_carry_flag(a, b, result, Operation::Add);
             assert!(eflags.get_carry_flag());
 
             let a = (u8::MAX - 1) as i8;
             let b = 1_u8 as i8;
-            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::False);
+            let result = a.wrapping_add(b);
+            eflags.compute_carry_flag(a, b, result, Operation::Add);
             assert!(!eflags.get_carry_flag());
 
             let a = (u8::MAX - 1) as i8;
             let b = 1_u8 as i8;
-            eflags.compute_carry_flag(a, b, Operation::Add, WithCarry::True);
+            let result = a.wrapping_add(b).wrapping_add(1);
+            eflags.compute_carry_flag(a, b, result, Operation::Add);
             assert!(eflags.get_carry_flag());
 
             let a = u8::MIN;
             let b = 1_u8;
-            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::False);
+            let result = a.wrapping_sub(b);
+            eflags.compute_carry_flag(a, b, result, Operation::Subtract);
             assert!(eflags.get_carry_flag());
 
             let a = u8::MIN as i8;
             let b = 1_u8 as i8;
-            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::False);
+            let result = a.wrapping_sub(b);
+            eflags.compute_carry_flag(a, b, result, Operation::Subtract);
             assert!(eflags.get_carry_flag());
 
             let a = u8::MIN + 1;
             let b = 1_u8;
-            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::False);
+            let result = a.wrapping_sub(b);
+            eflags.compute_carry_flag(a, b, result, Operation::Subtract);
             assert!(!eflags.get_carry_flag());
 
             let a = u8::MIN + 1;
             let b = 1_u8;
-            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::True);
+            let result = a.wrapping_sub(b).wrapping_sub(1);
+            eflags.compute_carry_flag(a, b, result, Operation::Subtract);
             assert!(eflags.get_carry_flag());
 
             let a = (u8::MIN + 1) as i8;
             let b = 1_u8 as i8;
-            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::False);
+            let result = a.wrapping_sub(b);
+            eflags.compute_carry_flag(a, b, result, Operation::Subtract);
             assert!(!eflags.get_carry_flag());
 
             let a = (u8::MIN + 1) as i8;
             let b = 1_u8 as i8;
-            eflags.compute_carry_flag(a, b, Operation::Subtract, WithCarry::True);
+            let result = a.wrapping_sub(b).wrapping_sub(1);
+            eflags.compute_carry_flag(a, b, result, Operation::Subtract);
             assert!(eflags.get_carry_flag());
         }
 
@@ -1066,33 +1055,21 @@ mod tests {
             // + 0000 0001
             //   ---------
             //   0001 0000 (AF = true)
-            eflags.compute_auxiliary_carry_flag(
-                0b0000_1111_u8,
-                0b0000_0001_u8,
-                Operation::Add,
-            );
+            eflags.compute_auxiliary_carry_flag(0b0000_1111_u8, 0b0000_0001_u8, Operation::Add);
             assert!(eflags.get_auxiliary_carry_flag());
 
             //   0000 1110
             // + 0000 0001
             //   ---------
             //   0000 1111 (AF = false)
-            eflags.compute_auxiliary_carry_flag(
-                0b0000_1110_u8,
-                0b0000_0001_u8,
-                Operation::Add,
-            );
+            eflags.compute_auxiliary_carry_flag(0b0000_1110_u8, 0b0000_0001_u8, Operation::Add);
             assert!(!eflags.get_auxiliary_carry_flag());
 
             //   1110 1111
             // + 1111 0001
             //   ---------
             //   1100 0000 (AF = true)
-            eflags.compute_auxiliary_carry_flag(
-                0b1110_1111_u8,
-                0b1111_0001_u8,
-                Operation::Add,
-            );
+            eflags.compute_auxiliary_carry_flag(0b1110_1111_u8, 0b1111_0001_u8, Operation::Add);
             assert!(eflags.get_auxiliary_carry_flag());
         }
 
