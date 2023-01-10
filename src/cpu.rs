@@ -9,8 +9,8 @@ use crate::{
         unwrap_operands, Immediate, Instruction, RegisterOrMemory16, RegisterOrMemory32,
         RegisterOrMemory8,
     },
-    register::{Register16, Register32, Register8, Eflags, WithCarry, Registers},
-    traits::{AsUnsigned, AsSigned},
+    register::{Eflags, Register16, Register32, Register8, Registers, WithCarry},
+    traits::{AsSigned, AsUnsigned},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -25,9 +25,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    /// Performs wrapping addition, adding the carry flag if required, and setting flags which can
-    /// only be known by observing the addition. These are OF, and AF. Other flags are not set and
-    /// should be set separately.
+    /// Performs wrapping addition, adding the carry if required.
     fn wrapping_add<T>(&mut self, lhs: T, rhs: T, with_carry: WithCarry) -> T
     where
         T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
@@ -38,19 +36,10 @@ impl Cpu {
             let carry = FromPrimitive::from_u8(carry).unwrap();
             result.wrapping_add(&carry);
         }
-
-        self.registers
-            .eflags
-            .compute_overflow_flag(lhs, rhs, result, Operation::Add);
-        self.registers
-            .eflags
-            .compute_auxiliary_carry_flag(lhs, rhs, Operation::Add);
-
         result
     }
 
-    /// Performs wrapping subtraction, settings flags which can only be known by observing the
-    /// subtraction. These are OF, and AF.
+    /// Performs wrapping subtraction, subtracting the carry if required.
     fn wrapping_sub<T>(&mut self, lhs: T, rhs: T, with_carry: WithCarry) -> T
     where
         T: PrimInt + WrappingSub + FromPrimitive + AsUnsigned,
@@ -61,14 +50,6 @@ impl Cpu {
             let carry = FromPrimitive::from_u8(carry).unwrap();
             result.wrapping_sub(&carry);
         }
-
-        self.registers
-            .eflags
-            .compute_overflow_flag(lhs, rhs, result, Operation::Subtract);
-        self.registers
-            .eflags
-            .compute_auxiliary_carry_flag(lhs, rhs, Operation::Subtract);
-
         result
     }
 
@@ -79,12 +60,19 @@ impl Cpu {
         T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
         let result = self.wrapping_add(lhs, rhs, WithCarry::True);
+        self.registers
+            .eflags
+            .compute_overflow_flag(lhs, rhs, result, Operation::Add);
+        self.registers.eflags.compute_sign_flag(result);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers
+            .eflags
+            .compute_auxiliary_carry_flag(lhs, rhs, Operation::Add);
+
         self.registers.eflags.compute_parity_flag(result);
         self.registers
             .eflags
             .compute_carry_flag(lhs, rhs, result, Operation::Add);
-        self.registers.eflags.compute_zero_flag(result);
-        self.registers.eflags.compute_sign_flag(result);
         result
     }
 
@@ -149,15 +137,18 @@ impl Cpu {
         T: PrimInt + WrappingAdd + FromPrimitive + AsUnsigned,
     {
         let result = self.wrapping_add(lhs, rhs, WithCarry::False);
-        self.registers.eflags.compute_parity_flag(result);
-        self.registers.eflags.compute_carry_flag(
-            lhs,
-            rhs,
-            result,
-            Operation::Add,
-        );
-        self.registers.eflags.compute_zero_flag(result);
+        self.registers
+            .eflags
+            .compute_overflow_flag(lhs, rhs, result, Operation::Add);
         self.registers.eflags.compute_sign_flag(result);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers
+            .eflags
+            .compute_auxiliary_carry_flag(lhs, rhs, Operation::Add);
+        self.registers.eflags.compute_parity_flag(result);
+        self.registers
+            .eflags
+            .compute_carry_flag(lhs, rhs, result, Operation::Add);
         result
     }
 
@@ -413,15 +404,19 @@ impl Cpu {
         T: PrimInt + WrappingSub + AsUnsigned + FromPrimitive,
     {
         let result = self.wrapping_sub(lhs, rhs, WithCarry::True);
-        self.registers.eflags.compute_parity_flag(result);
-        self.registers.eflags.compute_carry_flag(
-            lhs,
-            rhs,
-            result,
-            Operation::Subtract,
-        );
-        self.registers.eflags.compute_zero_flag(result);
+        self.registers
+            .eflags
+            .compute_overflow_flag(lhs, rhs, result, Operation::Subtract);
         self.registers.eflags.compute_sign_flag(result);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers
+            .eflags
+            .compute_auxiliary_carry_flag(lhs, rhs, Operation::Subtract);
+
+        self.registers.eflags.compute_parity_flag(result);
+        self.registers
+            .eflags
+            .compute_carry_flag(lhs, rhs, result, Operation::Subtract);
         result
     }
 
@@ -477,18 +472,20 @@ impl Cpu {
         T: PrimInt + WrappingSub + AsUnsigned + FromPrimitive,
     {
         let result = self.wrapping_sub(lhs, rhs, WithCarry::False);
-        self.registers.eflags.compute_parity_flag(result);
-        self.registers.eflags.compute_carry_flag(
-            lhs,
-            rhs,
-            result,
-            Operation::Subtract,
-        );
-        self.registers.eflags.compute_zero_flag(result);
+        self.registers
+            .eflags
+            .compute_overflow_flag(lhs, rhs, result, Operation::Subtract);
         self.registers.eflags.compute_sign_flag(result);
+        self.registers.eflags.compute_zero_flag(result);
+        self.registers
+            .eflags
+            .compute_auxiliary_carry_flag(lhs, rhs, Operation::Subtract);
+        self.registers.eflags.compute_parity_flag(result);
+        self.registers
+            .eflags
+            .compute_carry_flag(lhs, rhs, result, Operation::Subtract);
         result
     }
-
 
     pub(crate) fn sub_al_imm8(&mut self, instruction: &Instruction) {
         let (_al, imm8) = unwrap_operands!(instruction, &Register8, &Immediate);

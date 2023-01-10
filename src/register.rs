@@ -151,28 +151,29 @@ impl Eflags {
     /// carry/borrow. For the purposes of computing the carry flag, we are only interested in
     /// unsigned integer addition, hence that bound has been added. If a signed integer was
     /// provided, an incorrect value would be produced.
-    pub(crate) fn compute_carry_flag<T>(&mut self, a: T, b: T, result: T, operation: Operation)
+    pub(crate) fn compute_carry_flag<T>(&mut self, lhs: T, rhs: T, result: T, operation: Operation)
     where
         T: PrimInt + AsUnsigned,
     {
-        let a = a.as_unsigned();
-        let b = b.as_unsigned();
+        let lhs = lhs.as_unsigned();
+        let rhs = rhs.as_unsigned();
         let result = result.as_unsigned();
         let carried = match operation {
             Operation::Add => {
-                result < a.max(b) || ((result == a.max(b)) && !(a.is_zero() || b.is_zero()))
+                result < lhs.max(rhs)
+                    || ((result == lhs.max(rhs)) && !(lhs.is_zero() || rhs.is_zero()))
             }
-            Operation::Subtract => result > a || ((result == a) && (b.is_zero())),
+            Operation::Subtract => result > lhs || (result == lhs && rhs.is_zero()),
         };
         self.set_carry_flag(carried);
     }
 
     /// Sets the parity flag if the least significant byte of the result of the last operation has
     /// an even number of bits set to 1.
-    pub(crate) fn compute_parity_flag<T: PrimInt + AsUnsigned + FromPrimitive>(
-        &mut self,
-        result: T,
-    ) {
+    pub(crate) fn compute_parity_flag<T>(&mut self, result: T)
+    where
+        T: PrimInt + AsUnsigned + FromPrimitive,
+    {
         let least_significant_byte = result.as_unsigned() & FromPrimitive::from_u8(0xFF).unwrap();
         self.set_parity_flag(least_significant_byte.count_ones() % 2 == 0);
     }
@@ -180,24 +181,29 @@ impl Eflags {
     /// Sets the overflow flag if the signed addition (two's complement) cannot fit within the
     /// number of bits. I.e. if two operands of the same sign are added, or two operands of
     /// opposite sign are subtracted and a result of different sign is produced.
-    pub(crate) fn compute_overflow_flag<T>(&mut self, a: T, b: T, result: T, operation: Operation)
-    where
+    pub(crate) fn compute_overflow_flag<T>(
+        &mut self,
+        lhs: T,
+        rhs: T,
+        result: T,
+        operation: Operation,
+    ) where
         T: PrimInt,
     {
         let overflowed = match operation {
-            Operation::Add => a.sign() == b.sign() && result.sign() != a.sign(),
-            Operation::Subtract => a.sign() != b.sign() && result.sign() != a.sign(),
+            Operation::Add => lhs.sign() == rhs.sign() && result.sign() != lhs.sign(),
+            Operation::Subtract => lhs.sign() != rhs.sign() && result.sign() != lhs.sign(),
         };
         self.set_overflow_flag(overflowed);
     }
 
     /// Sets the auxiliary carry flag if a carry or borrow is generated out of the 3rd bit.
-    pub(crate) fn compute_auxiliary_carry_flag<T>(&mut self, a: T, b: T, operation: Operation)
+    pub(crate) fn compute_auxiliary_carry_flag<T>(&mut self, lhs: T, rhs: T, operation: Operation)
     where
-        T: PrimInt + FromPrimitive + AsUnsigned,
+        T: PrimInt + AsUnsigned + FromPrimitive,
     {
-        let a = a.as_unsigned();
-        let b = b.as_unsigned();
+        let a = lhs.as_unsigned();
+        let b = rhs.as_unsigned();
         let a_lower_nibble = a & FromPrimitive::from_u8(0xf).unwrap();
         let b_lower_nibble = b & FromPrimitive::from_u8(0xf).unwrap();
 
