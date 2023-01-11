@@ -988,18 +988,23 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
 ///
 /// There cannot be more than two registers used in the formation of a valid memory address,
 /// therefore this is tracked and a push will fail on the third attempt to push a register.
+// FIXME: It's very bizarre for `EffectiveAddress` to be anything more than a `usize`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EffectiveAddress {
-    sequence: Vec<(EffectiveAddressOperator, EffectiveAddressOperand)>,
+    raw: Vec<(EffectiveAddressOperator, EffectiveAddressOperand)>,
     num_registers: u8,
 }
 
 impl EffectiveAddress {
     pub fn new() -> Self {
         Self {
-            sequence: Vec::new(),
+            raw: Vec::new(),
             num_registers: 0,
         }
+    }
+
+    pub fn resolve(&self) -> usize {
+        todo!()
     }
 
     // TODO: Tests.
@@ -1016,7 +1021,7 @@ impl EffectiveAddress {
                 ));
             }
         }
-        self.sequence.push((operator, operand));
+        self.raw.push((operator, operand));
         Ok(())
     }
 
@@ -1886,49 +1891,49 @@ mod tests {
         assert_ea_err!("[eip]");
 
         let expected = EffectiveAddress {
-            sequence: vec![(Add, eao!(imm "1"))],
+            raw: vec![(Add, eao!(imm "1"))],
             num_registers: 0,
         };
         assert_eq!(ea!("[1]"), expected);
 
         let expected = EffectiveAddress {
-            sequence: vec![(Add, eao!(imm "1"))],
+            raw: vec![(Add, eao!(imm "1"))],
             num_registers: 0,
         };
         assert_eq!(ea!("[+1]"), expected);
 
         let expected = EffectiveAddress {
-            sequence: vec![(Add, eao!(reg "eax"))],
+            raw: vec![(Add, eao!(reg "eax"))],
             num_registers: 1,
         };
         assert_eq!(ea!("[eax]"), expected);
 
         let expected = EffectiveAddress {
-            sequence: vec![(Add, eao!(reg "eax"))],
+            raw: vec![(Add, eao!(reg "eax"))],
             num_registers: 1,
         };
         assert_eq!(ea!("[     eAx     ]"), expected);
 
         let expected = EffectiveAddress {
-            sequence: vec![(Add, eao!(reg "eax")), (Add, eao!(reg "ebx"))],
+            raw: vec![(Add, eao!(reg "eax")), (Add, eao!(reg "ebx"))],
             num_registers: 2,
         };
         assert_eq!(ea!("[eax+ebx]"), expected);
 
         let expected = EffectiveAddress {
-            sequence: vec![(Add, eao!(reg "eax")), (Add, eao!(imm "4"))],
+            raw: vec![(Add, eao!(reg "eax")), (Add, eao!(imm "4"))],
             num_registers: 1,
         };
         assert_eq!(ea!("[ eax   +  4 ]"), expected);
 
         let expected = EffectiveAddress {
-            sequence: vec![(Add, eao!(reg "eax")), (Subtract, eao!(imm "10"))],
+            raw: vec![(Add, eao!(reg "eax")), (Subtract, eao!(imm "10"))],
             num_registers: 1,
         };
         assert_eq!(ea!("[eax-10]"), expected);
 
         let expected = EffectiveAddress {
-            sequence: vec![
+            raw: vec![
                 (Add, eao!(imm "8")),
                 (Multiply, eao!(imm "4")),
                 (Add, eao!(reg "ebx")),
@@ -1938,7 +1943,7 @@ mod tests {
         assert_eq!(ea!("[8*4+ebx]"), expected);
 
         let expected = EffectiveAddress {
-            sequence: vec![
+            raw: vec![
                 (Add, eao!(reg "eax")),
                 (Multiply, eao!(imm "2")),
                 (Add, eao!(imm "4000q")),
