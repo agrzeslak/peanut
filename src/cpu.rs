@@ -213,7 +213,6 @@ impl Cpu {
 
     /// Performs a bitwise AND operation. Clears the OF and CF flags, and sets the SF, ZF, and PF
     /// flags depending on the result. The state of the AF flag is undefined.
-    /// TODO: Tests.
     fn and<T>(&mut self, lhs: T, rhs: T) -> T
     where
         T: PrimInt + BitAnd<Output = T> + AsUnsigned + FromPrimitive,
@@ -292,7 +291,6 @@ impl Cpu {
 
     /// Performs a bitwise inclusive OR operation. The OF and CF flags are cleared, and the SF, ZF,
     /// and PF flags are set according to the result. The AF flag is undefined.
-    /// TODO: Tests.
     fn or<T>(&mut self, lhs: T, rhs: T) -> T
     where
         T: PrimInt + BitOr<T> + AsUnsigned + FromPrimitive,
@@ -588,6 +586,7 @@ mod tests {
     // FF | 255  |  -1   | 80 | 128  | -128  | 7F | 127  |  127  | 1  | 0  | 0  | 1
     // 80 | 128  | -128  | 80 | 128  | -128  | 0  |  0   |   0   | 1  | 0  | 1  | 1
     // 7F | 127  |  127  | 7F | 127  |  127  | FE | 254  |  -2   | 1  | 1  | 0  | 0
+    // TODO: Test for other 2 flags which are set.
     #[test]
     fn add() {
         let mut cpu = Cpu::default();
@@ -690,6 +689,7 @@ mod tests {
     // FE | 254  |  -2   | 7F | 127  |  127  | 7F | 127  |  127  || 1  | 0  | 0  | 0
     // 7F | 127  |  127  | FF | 255  |  -1   | 80 | 128  | -128  || 1  | 1  | 0  | 1
     // TODO: Why can't you have the other flag combinations e.g. OF + ZF?
+    // TODO: Test for other 2 flags which are set.
     #[test]
     fn sub() {
         let mut cpu = Cpu::default();
@@ -768,9 +768,36 @@ mod tests {
         cpu.registers.eflags.set_overflow_flag(true);
         cpu.registers.eflags.set_carry_flag(true);
 
+        assert_eq!(cpu.and(0b0000_0001_u8, 0b1111_1111_u8), 0b0000_0001_u8 & 0b1111_1111_u8);
+        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = false, PF = false);
+
+        assert_eq!(cpu.and(0b0000_0011_u8, 0b1111_1111_u8), 0b0000_0011_u8 & 0b1111_1111_u8);
+        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = false, PF = true);
+
         assert_eq!(cpu.and(0b0000_0000_u8, 0b1111_1111_u8), 0b0000_0000_u8 & 0b1111_1111_u8);
         assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = true, PF = true);
 
-        // TODO: more.
+        assert_eq!(cpu.and(0b1000_0000_u8, 0b1111_1111_u8), 0b1000_0000_u8 & 0b1111_1111_u8);
+        assert_eflags!(cpu, OF = false, CF = false, SF = true, ZF = false, PF = false);
+    }
+
+    #[test]
+    fn or() {
+        let mut cpu = Cpu::default();
+
+        cpu.registers.eflags.set_overflow_flag(true);
+        cpu.registers.eflags.set_carry_flag(true);
+
+        assert_eq!(cpu.or(0b0000_0001_u8, 0b0000_0000_u8), 0b0000_0001_u8 | 0b0000_0000_u8);
+        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = false, PF = false);
+
+        assert_eq!(cpu.or(0b0000_0011_u8, 0b0000_0000_u8), 0b0000_0011_u8 | 0b0000_0000_u8);
+        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = false, PF = true);
+
+        assert_eq!(cpu.or(0b0000_0000_u8, 0b0000_0000_u8), 0b0000_0000_u8 | 0b0000_0000_u8);
+        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = true, PF = true);
+
+        assert_eq!(cpu.or(0b1000_0000_u8, 0b0000_0000_u8), 0b1000_0000_u8 | 0b0000_0000_u8);
+        assert_eflags!(cpu, OF = false, CF = false, SF = true, ZF = false, PF = false);
     }
 }
