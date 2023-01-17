@@ -566,6 +566,9 @@ mod tests {
         (@ $cpu:ident, CF=$expected:literal) => {
             assert_eq!($cpu.registers.eflags.get_carry_flag(), $expected, "CF is incorrect")
         };
+        (@ $cpu:ident, PF=$expected:literal) => {
+            assert_eq!($cpu.registers.eflags.get_parity_flag(), $expected, "PF is incorrect")
+        };
         ($cpu:ident, $($flag:ident=$expected:literal),+) => {
             $(assert_eflags!(@ $cpu, $flag=$expected));+
         };
@@ -756,5 +759,18 @@ mod tests {
 
         assert_eq!(cpu.sub(0x7F_u8, 0xFF_u8), 0x80_u8);
         assert_eflags!(cpu, OF = true, SF = true, ZF = false, CF = true);
+    }
+
+    #[test]
+    fn and() {
+        let mut cpu = Cpu::default();
+
+        cpu.registers.eflags.set_overflow_flag(true);
+        cpu.registers.eflags.set_carry_flag(true);
+
+        assert_eq!(cpu.and(0b0000_0000_u8, 0b1111_1111_u8), 0b0000_0000_u8 & 0b1111_1111_u8);
+        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = true, PF = true);
+
+        // TODO: more.
     }
 }
