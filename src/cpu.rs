@@ -552,20 +552,27 @@ mod tests {
     use super::*;
 
     macro_rules! assert_eflags {
-        (@ $cpu:ident, OF=$expected:literal) => {
-            assert_eq!($cpu.registers.eflags.get_overflow_flag(), $expected, "OF is incorrect")
-        };
-        (@ $cpu:ident, SF=$expected:literal) => {
-            assert_eq!($cpu.registers.eflags.get_sign_flag(), $expected, "SF is incorrect")
-        };
-        (@ $cpu:ident, ZF=$expected:literal) => {
-            assert_eq!($cpu.registers.eflags.get_zero_flag(), $expected, "ZF is incorrect")
-        };
         (@ $cpu:ident, CF=$expected:literal) => {
             assert_eq!($cpu.registers.eflags.get_carry_flag(), $expected, "CF is incorrect")
         };
         (@ $cpu:ident, PF=$expected:literal) => {
             assert_eq!($cpu.registers.eflags.get_parity_flag(), $expected, "PF is incorrect")
+        };
+        (@ $cpu:ident, AF=$expected:literal) => {
+            assert_eq!(
+                $cpu.registers.eflags.get_auxiliary_carry_flag(),
+                $expected,
+                "AF is incorrect"
+            )
+        };
+        (@ $cpu:ident, ZF=$expected:literal) => {
+            assert_eq!($cpu.registers.eflags.get_zero_flag(), $expected, "ZF is incorrect")
+        };
+        (@ $cpu:ident, SF=$expected:literal) => {
+            assert_eq!($cpu.registers.eflags.get_sign_flag(), $expected, "SF is incorrect")
+        };
+        (@ $cpu:ident, OF=$expected:literal) => {
+            assert_eq!($cpu.registers.eflags.get_overflow_flag(), $expected, "OF is incorrect")
         };
         ($cpu:ident, $($flag:ident=$expected:literal),+) => {
             $(assert_eflags!(@ $cpu, $flag=$expected));+
@@ -586,7 +593,7 @@ mod tests {
     // FF | 255  |  -1   | 80 | 128  | -128  | 7F | 127  |  127  | 1  | 0  | 0  | 1
     // 80 | 128  | -128  | 80 | 128  | -128  | 0  |  0   |   0   | 1  | 0  | 1  | 1
     // 7F | 127  |  127  | 7F | 127  |  127  | FE | 254  |  -2   | 1  | 1  | 0  | 0
-    // TODO: Test for other 2 flags which are set.
+    // TODO: Test for AF and PF.
     #[test]
     fn add() {
         let mut cpu = Cpu::default();
@@ -768,17 +775,57 @@ mod tests {
         cpu.registers.eflags.set_overflow_flag(true);
         cpu.registers.eflags.set_carry_flag(true);
 
-        assert_eq!(cpu.and(0b0000_0001_u8, 0b1111_1111_u8), 0b0000_0001_u8 & 0b1111_1111_u8);
-        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = false, PF = false);
+        assert_eq!(
+            cpu.and(0b0000_0001_u8, 0b1111_1111_u8),
+            0b0000_0001_u8 & 0b1111_1111_u8
+        );
+        assert_eflags!(
+            cpu,
+            OF = false,
+            CF = false,
+            SF = false,
+            ZF = false,
+            PF = false
+        );
 
-        assert_eq!(cpu.and(0b0000_0011_u8, 0b1111_1111_u8), 0b0000_0011_u8 & 0b1111_1111_u8);
-        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = false, PF = true);
+        assert_eq!(
+            cpu.and(0b0000_0011_u8, 0b1111_1111_u8),
+            0b0000_0011_u8 & 0b1111_1111_u8
+        );
+        assert_eflags!(
+            cpu,
+            OF = false,
+            CF = false,
+            SF = false,
+            ZF = false,
+            PF = true
+        );
 
-        assert_eq!(cpu.and(0b0000_0000_u8, 0b1111_1111_u8), 0b0000_0000_u8 & 0b1111_1111_u8);
-        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = true, PF = true);
+        assert_eq!(
+            cpu.and(0b0000_0000_u8, 0b1111_1111_u8),
+            0b0000_0000_u8 & 0b1111_1111_u8
+        );
+        assert_eflags!(
+            cpu,
+            OF = false,
+            CF = false,
+            SF = false,
+            ZF = true,
+            PF = true
+        );
 
-        assert_eq!(cpu.and(0b1000_0000_u8, 0b1111_1111_u8), 0b1000_0000_u8 & 0b1111_1111_u8);
-        assert_eflags!(cpu, OF = false, CF = false, SF = true, ZF = false, PF = false);
+        assert_eq!(
+            cpu.and(0b1000_0000_u8, 0b1111_1111_u8),
+            0b1000_0000_u8 & 0b1111_1111_u8
+        );
+        assert_eflags!(
+            cpu,
+            OF = false,
+            CF = false,
+            SF = true,
+            ZF = false,
+            PF = false
+        );
     }
 
     #[test]
@@ -788,16 +835,56 @@ mod tests {
         cpu.registers.eflags.set_overflow_flag(true);
         cpu.registers.eflags.set_carry_flag(true);
 
-        assert_eq!(cpu.or(0b0000_0001_u8, 0b0000_0000_u8), 0b0000_0001_u8 | 0b0000_0000_u8);
-        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = false, PF = false);
+        assert_eq!(
+            cpu.or(0b0000_0001_u8, 0b0000_0000_u8),
+            0b0000_0001_u8 | 0b0000_0000_u8
+        );
+        assert_eflags!(
+            cpu,
+            OF = false,
+            CF = false,
+            SF = false,
+            ZF = false,
+            PF = false
+        );
 
-        assert_eq!(cpu.or(0b0000_0011_u8, 0b0000_0000_u8), 0b0000_0011_u8 | 0b0000_0000_u8);
-        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = false, PF = true);
+        assert_eq!(
+            cpu.or(0b0000_0011_u8, 0b0000_0000_u8),
+            0b0000_0011_u8 | 0b0000_0000_u8
+        );
+        assert_eflags!(
+            cpu,
+            OF = false,
+            CF = false,
+            SF = false,
+            ZF = false,
+            PF = true
+        );
 
-        assert_eq!(cpu.or(0b0000_0000_u8, 0b0000_0000_u8), 0b0000_0000_u8 | 0b0000_0000_u8);
-        assert_eflags!(cpu, OF = false, CF = false, SF = false, ZF = true, PF = true);
+        assert_eq!(
+            cpu.or(0b0000_0000_u8, 0b0000_0000_u8),
+            0b0000_0000_u8 | 0b0000_0000_u8
+        );
+        assert_eflags!(
+            cpu,
+            OF = false,
+            CF = false,
+            SF = false,
+            ZF = true,
+            PF = true
+        );
 
-        assert_eq!(cpu.or(0b1000_0000_u8, 0b0000_0000_u8), 0b1000_0000_u8 | 0b0000_0000_u8);
-        assert_eflags!(cpu, OF = false, CF = false, SF = true, ZF = false, PF = false);
+        assert_eq!(
+            cpu.or(0b1000_0000_u8, 0b0000_0000_u8),
+            0b1000_0000_u8 | 0b0000_0000_u8
+        );
+        assert_eflags!(
+            cpu,
+            OF = false,
+            CF = false,
+            SF = true,
+            ZF = false,
+            PF = false
+        );
     }
 }
