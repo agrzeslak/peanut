@@ -22,6 +22,7 @@ pub enum Operation {
 #[derive(Clone, Debug, Default)]
 pub struct Cpu {
     pub(crate) registers: Registers,
+    pub(crate) memory: Memory,
 }
 
 impl Cpu {
