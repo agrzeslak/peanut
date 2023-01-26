@@ -21,12 +21,12 @@ pub struct SIB {
 }
 
 impl SIB {
-    pub fn get_scale(&self) -> u8 {
+    pub fn get_scale(&self) -> Scale {
         match (self.scale.get(1), self.scale.get(0)) {
-            (false, false) => 1,
-            (false, true) => 2,
-            (true, false) => 4,
-            (true, true) => 8,
+            (false, false) => Scale::One,
+            (false, true) => Scale::Two,
+            (true, false) => Scale::Four,
+            (true, true) => Scale::Eight,
         }
     }
 

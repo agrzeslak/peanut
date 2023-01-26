@@ -1,16 +1,15 @@
 use std::ops::{BitAnd, BitOr};
 
-use num_traits::{
-    CheckedAdd, CheckedSub, FromPrimitive, PrimInt, Unsigned, WrappingAdd, WrappingSub,
-};
+use num_traits::{FromPrimitive, PrimInt, WrappingAdd, WrappingSub};
 
 use crate::{
     instruction::{
         unwrap_operands, Immediate, Instruction, RegisterOrMemory16, RegisterOrMemory32,
         RegisterOrMemory8,
     },
-    register::{Eflags, Register16, Register32, Register8, Registers, WithCarry},
-    traits::{AsSigned, AsUnsigned},
+    memory::Memory,
+    register::{Register16, Register32, Register8, Registers, WithCarry},
+    traits::AsUnsigned,
 };
 
 #[derive(Debug, PartialEq, Eq)]

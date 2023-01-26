@@ -1,7 +1,7 @@
 use crate::{
     cpu::Cpu,
     error::Error,
-    register::{Register, Register8, Register16, Register32},
+    register::{Register, Register16, Register32, Register8},
 };
 
 #[derive(Debug)]
@@ -989,6 +989,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
 /// There cannot be more than two registers used in the formation of a valid memory address,
 /// therefore this is tracked and a push will fail on the third attempt to push a register.
 // FIXME: It's very bizarre for `EffectiveAddress` to be anything more than a `usize`.
+// FIXME: Should this just be SIB?
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EffectiveAddress {
     raw: Vec<(EffectiveAddressOperator, EffectiveAddressOperand)>,
