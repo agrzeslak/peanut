@@ -31,7 +31,8 @@ pub enum Prefix {
     // Group 4: address-size override prefix.
     AddressSizeOverride,
 
-    // TODO: Unsure what 9B refers to. Shows up on https://ref.x86asm.net/coder32.html.
+    // 9B may be the wait prefix, but unsure.
+    Other(u8),
 }
 
 impl Prefix {
@@ -55,13 +56,10 @@ impl Prefix {
             BranchNotTaken => 0x3E,
             OperandSizeOverride => 0x66,
             AddressSizeOverride => 0x67,
+            Other(n) => *n,
         }
     }
 }
-
-/// May be either 1, 2, or 3 bytes in length. Additional 3-bit opcode field is sometimes encoded
-/// within the ModR/M byte.
-pub struct PrimaryOpcode(u8, Option<u8>, Option<u8>);
 
 /// May be either 1, 2, or 4 bytes.
 pub enum Displacement {
@@ -79,8 +77,8 @@ pub enum Immediate {
 
 pub struct Instruction {
     pub prefix: Option<u8>,
-    pub prefix_0f: Option<u8>,
-    pub primary_opcode: PrimaryOpcode,
+    pub prefix_0f: bool,
+    pub primary_opcode: u8,
     pub secondary_opcode: Option<u8>,
     pub modrm: Option<ModRM>,
     pub sib: Option<SIB>,
