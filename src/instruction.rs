@@ -1,7 +1,7 @@
 use crate::{
     cpu::Cpu,
     error::Error,
-    register::{Register, Register16, Register32, Register8},
+    register::{Register, Register16, Register32, Register8}, memory::Memory,
 };
 
 #[derive(Debug)]
@@ -1006,6 +1006,30 @@ impl EffectiveAddress {
 
     pub fn resolve(&self) -> usize {
         todo!()
+    }
+
+    pub fn read8(&self, memory: &Memory) -> u8 {
+
+    }
+
+    pub fn read16(&self, memory: &Memory) -> u16 {
+
+    }
+
+    pub fn read32(&self, memory: &Memory) -> u32 {
+
+    }
+
+    pub fn write8(&self, memory: &mut Memory) {
+
+    }
+
+    pub fn write16(&self, memory: &mut Memory) {
+
+    }
+
+    pub fn write32(&self, memory: &mut Memory) {
+
     }
 
     // TODO: Tests.
