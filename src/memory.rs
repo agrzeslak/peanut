@@ -8,8 +8,8 @@ const MEMORY_SIZE_BYTES: usize = 1024 * 1024;
 pub struct Memory(Box<[u8; MEMORY_SIZE_BYTES]>);
 
 impl Memory {
-    /// Reads 8 bytes from memory at the provided index. If the an out-of-bounds area of memory is
-    /// being read, an error is returned.
+    /// Reads a byte from memory at the provided index. If the index is out-of-bounds, then an
+    /// `Err` is returned.
     pub fn read8(&self, index: usize) -> Result<u8, Error> {
         match self.0.get(index) {
             Some(n) => Ok(*n),
@@ -17,8 +17,8 @@ impl Memory {
         }
     }
 
-    /// Reads 16 bytes from memory starting from the provided index, in little-endian. If the an
-    /// out-of-bounds area of memory is being read, an error is returned.
+    /// Reads 2 bytes from memory starting from the provided index, in little-endian format. If an
+    /// out-of-bounds area of memory is being read, then an `Err` is returned.
     pub fn read16(&self, index: usize) -> Result<u16, Error> {
         let Some(n) = self.0.get(index) else {
             return Err(Error::InvalidMemoryAddress(format!("{index}")));
@@ -33,7 +33,7 @@ impl Memory {
         Ok(result)
     }
 
-    /// Reads 32 bytes from memory starting from the provided index, in little-endian. If the an
+    /// Reads 4 bytes from memory starting from the provided index, in little-endian format. If an
     /// out-of-bounds area of memory is being read, an error is returned.
     pub fn read32(&self, index: usize) -> Result<u32, Error> {
         let mut result = 0;
@@ -48,6 +48,8 @@ impl Memory {
         Ok(result)
     }
 
+    /// Writes a byte into memory at the provided index. If the index is out-of-bounds, then an
+    /// `Err` is returned.
     pub fn write8(&mut self, index: usize, value: u8) -> Result<(), Error> {
         if index >= MEMORY_SIZE_BYTES {
             return Err(Error::InvalidMemoryAddress(format!(
@@ -58,6 +60,8 @@ impl Memory {
         Ok(())
     }
 
+    /// Writes 2 bytes into memory starting at the provided index, in little-endian format. If an
+    /// out-of-bounds area of memory is accessed, then an `Err` is returned.
     pub fn write16(&mut self, index: usize, value: u16) -> Result<(), Error> {
         if index + 1 >= MEMORY_SIZE_BYTES {
             return Err(Error::InvalidMemoryAddress(format!(
@@ -70,6 +74,8 @@ impl Memory {
         Ok(())
     }
 
+    /// Writes 4 bytes into memory starting at the provided index, in little-endian format. If an
+    /// out-of-bounds area of memory is accessed, then an `Err` is returned.
     pub fn write32(&mut self, index: usize, value: u32) -> Result<(), Error> {
         if index + 3 >= MEMORY_SIZE_BYTES {
             return Err(Error::InvalidMemoryAddress(format!(
