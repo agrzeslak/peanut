@@ -15,8 +15,6 @@ use clap::Parser;
 use cpu::Cpu;
 use instruction::{Instruction, NasmStr};
 
-use crate::newinstruction::{Displacement, Prefix};
-
 pub fn run() {
     let arguments = arguments::Arguments::parse();
     let file_contents = fs::read_to_string(&arguments.file_path).expect("failed to read file");
