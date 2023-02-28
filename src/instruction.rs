@@ -1,7 +1,8 @@
 use crate::{
     cpu::Cpu,
     error::Error,
-    register::{Register, Register16, Register32, Register8}, memory::Memory,
+    memory::Memory,
+    register::{Register, Register16, Register32, Register8},
 };
 
 #[derive(Debug)]
@@ -1545,18 +1546,21 @@ pub(crate) enum RegisterOrMemory32<'a> {
     Memory(&'a EffectiveAddress),
 }
 
+// TODO: test
 impl RegisterOrMemory32<'_> {
-    pub fn read32(&self, cpu: &Cpu) -> u32 {
+    pub fn read32(&self, cpu: &Cpu) -> Result<u32, Error> {
         match self {
-            Self::Register(register) => cpu.registers.read32(register),
-            Self::Memory(effective_address) => todo!(),
+            Self::Register(register) => Ok(cpu.registers.read32(register)),
+            Self::Memory(effective_address) => cpu.memory.read32(effective_address.resolve()),
         }
     }
 
-    pub fn write32(&self, cpu: &mut Cpu, value: u32) {
+    pub fn write32(&self, cpu: &mut Cpu, value: u32) -> Result<(), Error> {
         match self {
-            Self::Register(register) => cpu.registers.write32(register, value),
-            Self::Memory(effective_address) => todo!(),
+            Self::Register(register) => Ok(cpu.registers.write32(register, value)),
+            Self::Memory(effective_address) => {
+                cpu.memory.write32(effective_address.resolve(), value)
+            }
         }
     }
 }
@@ -1595,18 +1599,21 @@ pub(crate) enum RegisterOrMemory16<'a> {
     Memory(&'a EffectiveAddress),
 }
 
+// TODO: test
 impl RegisterOrMemory16<'_> {
-    pub fn read16(&self, cpu: &Cpu) -> u16 {
+    pub fn read16(&self, cpu: &Cpu) -> Result<u16, Error> {
         match self {
-            Self::Register(register) => cpu.registers.read16(register),
-            Self::Memory(effective_address) => todo!(),
+            Self::Register(register) => Ok(cpu.registers.read16(register)),
+            Self::Memory(effective_address) => cpu.memory.read16(effective_address.resolve()),
         }
     }
 
-    pub fn write16(&self, cpu: &mut Cpu, value: u16) {
+    pub fn write16(&self, cpu: &mut Cpu, value: u16) -> Result<(), Error> {
         match self {
-            Self::Register(register) => cpu.registers.write16(register, value),
-            Self::Memory(effective_address) => todo!(),
+            Self::Register(register) => Ok(cpu.registers.write16(register, value)),
+            Self::Memory(effective_address) => {
+                cpu.memory.write16(effective_address.resolve(), value)
+            }
         }
     }
 }
@@ -1645,18 +1652,21 @@ pub(crate) enum RegisterOrMemory8<'a> {
     Memory(&'a EffectiveAddress),
 }
 
+// TODO: test
 impl RegisterOrMemory8<'_> {
-    pub fn read8(&self, cpu: &Cpu) -> u8 {
+    pub fn read8(&self, cpu: &Cpu) -> Result<u8, Error> {
         match self {
-            Self::Register(register) => cpu.registers.read8(register),
-            Self::Memory(effective_address) => todo!(),
+            Self::Register(register) => Ok(cpu.registers.read8(register)),
+            Self::Memory(effective_address) => cpu.memory.read8(effective_address.resolve()),
         }
     }
 
-    pub fn write8(&self, cpu: &mut Cpu, value: u8) {
+    pub fn write8(&self, cpu: &mut Cpu, value: u8) -> Result<(), Error> {
         match self {
-            Self::Register(register) => cpu.registers.write8(register, value),
-            Self::Memory(effective_address) => todo!(),
+            Self::Register(register) => Ok(cpu.registers.write8(register, value)),
+            Self::Memory(effective_address) => {
+                cpu.memory.write8(effective_address.resolve(), value)
+            }
         }
     }
 }
