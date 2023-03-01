@@ -1009,30 +1009,6 @@ impl EffectiveAddress {
         todo!()
     }
 
-    pub fn read8(&self, memory: &Memory) -> u8 {
-        todo!()
-    }
-
-    pub fn read16(&self, memory: &Memory) -> u16 {
-        todo!()
-    }
-
-    pub fn read32(&self, memory: &Memory) -> u32 {
-        todo!()
-    }
-
-    pub fn write8(&self, memory: &mut Memory) {
-        todo!()
-    }
-
-    pub fn write16(&self, memory: &mut Memory) {
-        todo!()
-    }
-
-    pub fn write32(&self, memory: &mut Memory) {
-        todo!()
-    }
-
     // TODO: Tests.
     pub fn try_push(
         &mut self,
