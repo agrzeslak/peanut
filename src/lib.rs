@@ -2,7 +2,6 @@ mod arguments;
 mod cpu;
 mod error;
 mod instruction;
-mod machine;
 mod memory;
 mod newinstruction;
 mod register;

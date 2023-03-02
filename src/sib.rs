@@ -1,28 +1,44 @@
 use bitmaps::Bitmap;
 
-use crate::error::Error;
-
 pub enum Scale {
-    One = 1,
-    Two = 2,
-    Four = 4,
-    Eight = 8,
+    One = 0b00,
+    Two = 0b01,
+    Four = 0b10,
+    Eight = 0b11,
 }
 
-///   7                           0
+pub enum Index {
+    Eax = 0b000,
+    Ecx = 0b001,
+    Edx = 0b010,
+    Ebx = 0b011,
+    Ebp = 0b101,
+    Esi = 0b110,
+    Edi = 0b111,
+}
+
+pub enum Base {
+    Eax = 0b000,
+    Ecx = 0b001,
+    Edx = 0b010,
+    Ebx = 0b011,
+    Esp = 0b100,
+    DisplacementOnlyOrEbp = 0b101,
+    Esi = 0b110,
+    Edi = 0b111,
+}
+
+///   7   6   5   4   3   2   1   0
 /// +---+---+---+---+---+---+---+---+
 /// | scale |   index   |    base   |
 /// +---+---+---+---+---+---+---+---+
-#[derive(Default)]
-pub struct SIB {
-    scale: Bitmap<2>,
-    index: Bitmap<3>,
-    base: Bitmap<3>,
-}
+/// http://www.c-jump.com/CIS77/CPU/x86/X77_0100_sib_byte_layout.htm
+// TODO: Are the values encoded left-to-right or right-to-left?
+pub struct SIB(Bitmap<8>);
 
 impl SIB {
     pub fn get_scale(&self) -> Scale {
-        match (self.scale.get(1), self.scale.get(0)) {
+        match (self.0.get(7), self.0.get(6)) {
             (false, false) => Scale::One,
             (false, true) => Scale::Two,
             (true, false) => Scale::Four,
@@ -31,23 +47,22 @@ impl SIB {
     }
 
     pub fn set_scale(&mut self, scale: &Scale) {
-        use Scale::*;
         match scale {
-            One => {
-                self.scale.set(0, false);
-                self.scale.set(1, false);
+            Scale::One => {
+                self.0.set(6, false);
+                self.0.set(7, false);
             }
-            Two => {
-                self.scale.set(0, true);
-                self.scale.set(1, false);
+            Scale::Two => {
+                self.0.set(6, true);
+                self.0.set(7, false);
             }
-            Four => {
-                self.scale.set(0, false);
-                self.scale.set(1, true);
+            Scale::Four => {
+                self.0.set(6, false);
+                self.0.set(7, true);
             }
-            Eight => {
-                self.scale.set(0, true);
-                self.scale.set(1, true);
+            Scale::Eight => {
+                self.0.set(6, true);
+                self.0.set(7, true);
             }
         }
     }
