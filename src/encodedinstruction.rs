@@ -1,7 +1,5 @@
-use self::{modrm::ModRM, sib::SIB};
-
-mod modrm;
-mod sib;
+use crate::modrm::ModRM;
+use crate::sib::SIB;
 
 // TODO: Unclear if this is better than just using a `u8`. Also, if this is used, there must be a
 //       way to convert a `u8` into a `Prefix`, without manually writing it out.
