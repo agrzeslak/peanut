@@ -75,6 +75,8 @@ pub enum Immediate {
     Four = 4,
 }
 
+/// An instruction in a format as similar to machine code as possible. Primarily useful for
+/// assembling or disassembling.
 pub struct Instruction {
     pub prefix: Option<u8>,
     pub prefix_0f: bool,
