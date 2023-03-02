@@ -1,9 +1,10 @@
 mod arguments;
 mod cpu;
+mod encodedinstruction;
 mod error;
 mod instruction;
 mod memory;
-mod newinstruction;
+mod modrm;
 mod register;
 mod sib;
 mod traits;
