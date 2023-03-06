@@ -113,7 +113,10 @@ impl InstructionOperandFormat {
 
         // Validates that the immediate operand's size directive (if given) matches the target
         // size. If no size directive is provided, then it is accepted regardless of whether it may
-        // be too large. In the case that it is, it will simply be truncated when used.
+        // be too large. In the case that it is, it will simply be truncated when used. This
+        // tangentially allows negative numbers to work as expected, as inferring the size of -1
+        // would always result in `u32::MAX` due to two's complement encoding, even though it can
+        // equivalently fit in a BYTE (`u8::MAX`), or WORD (`u16::MAX`).
         let validate_immediate = |operand: &Operand, target_size: Size| -> bool {
             let OperandType::Immediate(_) = &operand.operand_type else {
                     return false;
@@ -1729,7 +1732,9 @@ mod tests {
         assert!(!F::Const3.matches(&vec![Operand::try_from(&NasmStr("4")).unwrap()]));
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("byte 1")).unwrap()]));
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("byte -1")).unwrap()]));
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
         assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
