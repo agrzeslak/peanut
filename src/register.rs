@@ -10,7 +10,7 @@ use crate::{
     cpu::Operation,
     error::Error,
     instruction::{NasmStr, OperandType, Size},
-    traits::{AsUnsigned, BitIndex, HighLowBytes32, MostSignificantBit, Signed},
+    traits::{AsUnsigned, BitIndex, HighLowBytes32, MostSignificantBit, Signed, RegisterReadWrite},
 };
 
 pub enum CurrentPrivilegeLevel {
@@ -278,6 +278,18 @@ pub enum Register32 {
     Esp,
 }
 
+impl RegisterReadWrite for Register32 {
+    type Value = u32;
+
+    fn read(&self, registers: &Registers) -> Self::Value {
+        registers.read32(self)
+    }
+
+    fn write(&self, registers: &mut Registers, value: Self::Value) {
+        registers.write32(self, value);
+    }
+}
+
 impl Display for Register32 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Register32::*;
@@ -396,6 +408,18 @@ impl Display for Register16 {
     }
 }
 
+impl RegisterReadWrite for Register16 {
+    type Value = u16;
+
+    fn read(&self, registers: &Registers) -> Self::Value {
+        registers.read16(self)
+    }
+
+    fn write(&self, registers: &mut Registers, value: Self::Value) {
+        registers.write16(self, value);
+    }
+}
+
 impl TryFrom<Register> for Register16 {
     type Error = Error;
 
@@ -487,6 +511,18 @@ impl Display for Register8 {
         };
 
         write!(f, "{register}")
+    }
+}
+
+impl RegisterReadWrite for Register8 {
+    type Value = u8;
+
+    fn read(&self, registers: &Registers) -> Self::Value {
+        registers.read8(self)
+    }
+
+    fn write(&self, registers: &mut Registers, value: Self::Value) {
+        registers.write8(self, value);
     }
 }
 

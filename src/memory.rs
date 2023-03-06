@@ -1,46 +1,50 @@
 use crate::error::Error;
 
-const MEMORY_SIZE_BYTES: usize = 1024 * 1024;
+// u32 rather than usize as we are emulating 32-bit x86. In other words, in the context of
+// operating within the emulator, u32 is usize.
+const MEMORY_SIZE_BYTES: u32 = 1024 * 1024;
 
 // Placed on the heap as the stack will otherwise overflow. Uses a `Box`ed array rather than a `Vec`
 // because it better encapsulates the idea that this is an exact, fixed amount of memory.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Memory(Box<[u8; MEMORY_SIZE_BYTES]>);
+pub struct Memory(Box<[u8; MEMORY_SIZE_BYTES as usize]>);
 
 impl Memory {
     /// Reads a byte from memory at the provided index. If the index is out-of-bounds, then an
     /// `Err` is returned.
-    pub fn read8(&self, index: usize) -> Result<u8, Error> {
+    pub fn read8(&self, index: u32) -> Result<u8, Error> {
+        let index = index as usize;
         match self.0.get(index) {
             Some(n) => Ok(*n),
-            None => Err(Error::InvalidMemoryAddress(format!("{index}"))),
+            None => Err(Error::InaccessibleAddress(format!("{index}"))),
         }
     }
 
     /// Reads 2 bytes from memory starting from the provided index, in little-endian format. If an
     /// out-of-bounds area of memory is being read, then an `Err` is returned.
-    pub fn read16(&self, index: usize) -> Result<u16, Error> {
-        let Some(n) = self.0.get(index) else {
-            return Err(Error::InvalidMemoryAddress(format!("{index}")));
-        };
-        let mut result = *n as u16;
+    pub fn read16(&self, index: u32) -> Result<u16, Error> {
+        let index = index as usize;
+        let mut result = 0;
 
-        let Some(n) = self.0.get(index + 1) else {
-            return Err(Error::InvalidMemoryAddress(format!("{}", index + 1)));
-        };
-        result |= (*n as u16) << 8;
+        for i in 0..2 {
+            let Some(n) = self.0.get(index + i) else {
+                return Err(Error::InaccessibleAddress(format!("reading 4 bytes went out-of-bounds at {}", index + i)));
+            };
+            result |= (*n as u16) << 8 * i;
+        }
 
         Ok(result)
     }
 
     /// Reads 4 bytes from memory starting from the provided index, in little-endian format. If an
     /// out-of-bounds area of memory is being read, an error is returned.
-    pub fn read32(&self, index: usize) -> Result<u32, Error> {
+    pub fn read32(&self, index: u32) -> Result<u32, Error> {
+        let index = index as usize;
         let mut result = 0;
 
         for i in 0..4 {
             let Some(n) = self.0.get(index + i) else {
-                return Err(Error::InvalidMemoryAddress(format!("reading 4 bytes went out-of-bounds at {}", index + i)));
+                return Err(Error::InaccessibleAddress(format!("reading 4 bytes went out-of-bounds at {}", index + i)));
             };
             result |= (*n as u32) << 8 * i;
         }
@@ -50,48 +54,57 @@ impl Memory {
 
     /// Writes a byte into memory at the provided index. If the index is out-of-bounds, then an
     /// `Err` is returned.
-    pub fn write8(&mut self, index: usize, value: u8) -> Result<(), Error> {
+    pub fn write8(&mut self, index: u32, value: u8) -> Result<(), Error> {
         if index >= MEMORY_SIZE_BYTES {
-            return Err(Error::InvalidMemoryAddress(format!(
+            return Err(Error::InaccessibleAddress(format!(
                 "{index} is out-of-bounds"
             )));
         }
+
+        let index = index as usize;
         self.0[index] = value;
+
         Ok(())
     }
 
     /// Writes 2 bytes into memory starting at the provided index, in little-endian format. If an
     /// out-of-bounds area of memory is accessed, then an `Err` is returned.
-    pub fn write16(&mut self, index: usize, value: u16) -> Result<(), Error> {
+    pub fn write16(&mut self, index: u32, value: u16) -> Result<(), Error> {
         if index + 1 >= MEMORY_SIZE_BYTES {
-            return Err(Error::InvalidMemoryAddress(format!(
+            return Err(Error::InaccessibleAddress(format!(
                 "writing 2 bytes starting at {index} would go out-of-bounds"
             )));
         }
+
+        let index = index as usize;
         for i in 0..2 {
             self.0[index + i] = (value >> 8 * i) as u8;
         }
+
         Ok(())
     }
 
     /// Writes 4 bytes into memory starting at the provided index, in little-endian format. If an
     /// out-of-bounds area of memory is accessed, then an `Err` is returned.
-    pub fn write32(&mut self, index: usize, value: u32) -> Result<(), Error> {
+    pub fn write32(&mut self, index: u32, value: u32) -> Result<(), Error> {
         if index + 3 >= MEMORY_SIZE_BYTES {
-            return Err(Error::InvalidMemoryAddress(format!(
+            return Err(Error::InaccessibleAddress(format!(
                 "writing 4 bytes starting at {index} would go out-of-bounds"
             )));
         }
+
+        let index = index as usize;
         for i in 0..4 {
             self.0[index + i] = (value >> 8 * i) as u8;
         }
+
         Ok(())
     }
 }
 
 impl Default for Memory {
     fn default() -> Self {
-        Self(Box::new([0; MEMORY_SIZE_BYTES]))
+        Self(Box::new([0; MEMORY_SIZE_BYTES as usize]))
     }
 }
 

@@ -1,8 +1,8 @@
 use crate::{
     cpu::Cpu,
     error::Error,
-    memory::Memory,
     register::{Register, Register16, Register32, Register8},
+    traits::{RegisterReadWrite, AsUnsigned},
 };
 
 #[derive(Debug)]
@@ -103,9 +103,9 @@ impl InstructionOperandFormat {
     /// provided.
     pub fn matches(&self, operands: &Vec<Operand>) -> bool {
         // Validates that the operand is the correct immediate value.
-        let validate_const = |operand: &Operand, target: i64| -> bool {
+        let validate_const = |operand: &Operand, target: u32| -> bool {
             if let OperandType::Immediate(immediate) = &operand.operand_type {
-                immediate.parsed() == target
+                immediate.0 == target
             } else {
                 false
             }
@@ -349,6 +349,7 @@ impl InstructionOperandFormat {
                 op1.operand_type == OperandType::Register(Register32::Eax.into())
                     && validate_immediate(op2, Size::Byte)
             }
+            // TODO: implement below
             // (F::AlMoffs8, Some(op1), Some(op2), None) => {},
             // (F::AxMoffs16, Some(op1), Some(op2), None) => {},
             // (F::EaxMoffs32, Some(op1), Some(op2), None) => {},
@@ -987,14 +988,26 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
 /// - [EAX] = [(Add, Register(Eax))]
 /// - [EAX+4*EBX] = [(Add, Register(Eax)), (Add, Immediate(4)), (Multiply, Register(Ebx))]
 ///
-/// There cannot be more than two registers used in the formation of a valid memory address,
+/// There cannot be more than two registers used in the formation of a valid effective address,
 /// therefore this is tracked and a push will fail on the third attempt to push a register.
-// FIXME: It's very bizarre for `EffectiveAddress` to be anything more than a `usize`.
-// FIXME: Should this just be SIB?
+/// Registers used must be general purpose.
+// FIXME: Apparently only general purpose registers should be able to be used as the base, but NASM
+//        appears to also allow si, di, bp, and bx.
+//        https://stackoverflow.com/questions/34058101/referencing-the-contents-of-a-memory-location-x86-addressing-modes/34058400#34058400
+// TODO: Should this just be SIB?
+// TODO: Tests. Also ensure that EIP cannot be used.
+// TODO: Restructure as follows: NasmStr to be parsed into a ??? (perhaps EffectiveAddressBuilder),
+//       which may contain additional information used for parsing, but that is not relevant to the
+//       final effective address. This then finally yields an effective address which is guaranteed
+//       to be valid. This can then be `.resolve()`d in order to do the equivalent of dereferencing
+//       a pointer, i.e. extracting addresses stored within registers to perform the final
+//       arithmetic. If there is nothing to derefence and it's simply a static value then that's
+//       even simpler.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EffectiveAddress {
     raw: Vec<(EffectiveAddressOperator, EffectiveAddressOperand)>,
     num_registers: u8,
+    register_size: Option<Size>,
 }
 
 impl EffectiveAddress {
@@ -1002,11 +1015,31 @@ impl EffectiveAddress {
         Self {
             raw: Vec::new(),
             num_registers: 0,
+            register_size: None,
         }
     }
 
-    pub fn resolve(&self) -> usize {
-        todo!()
+    pub fn resolve(&self, cpu: &Cpu) -> u32 {
+        let mut result = 0;
+
+        for (operator, operand) in &self.raw {
+            let operand = match operand {
+                EffectiveAddressOperand::Immediate(immediate) => immediate.0,
+                EffectiveAddressOperand::Register(register) => match register {
+                    Register::Register32(r) => r.read(&cpu.registers),
+                    Register::Register16(r) => r.read(&cpu.registers).into(),
+                    Register::Register8(r) => r.read(&cpu.registers).into(),
+                },
+            };
+
+            match operator {
+                EffectiveAddressOperator::Add => result = result + operand,
+                EffectiveAddressOperator::Subtract => result = result - operand,
+                EffectiveAddressOperator::Multiply => result = result * operand,
+            }
+        }
+
+        result
     }
 
     // TODO: Tests.
@@ -1015,20 +1048,33 @@ impl EffectiveAddress {
         operator: EffectiveAddressOperator,
         operand: EffectiveAddressOperand,
     ) -> Result<(), Error> {
-        if let EffectiveAddressOperand::Register(_) = operand {
+        if let EffectiveAddressOperand::Register(register) = &operand {
             self.num_registers += 1;
             if self.num_registers > 2 {
-                return Err(Error::CannotParseInstruction(
-                    "a memory address cannot be computed from more than two registers".into(),
+                return Err(Error::InvalidEffectiveAddress(
+                    "an effective address cannot be computed from more than two registers".into(),
                 ));
             }
+
+            if let Some(size) = &self.register_size {
+                if size != &register.size() {
+                    return Err(Error::InvalidEffectiveAddress(
+                        "an effective address cannot be computed from two registers of different sizes".into(),
+                    ));
+                }
+            } else {
+                self.register_size = Some(register.size().clone());
+            }
         }
+
         self.raw.push((operator, operand));
         Ok(())
     }
 
     // FIXME: If this can be implemented under the TryFrom trait that would be great. Am having
     //        issues with it conflicting with the core generic implementation.
+    // TODO: Never used. Intuitively this should be used somewhere but I forgot to replace it.
+    //       Remove otherwise.
     // TODO: Tests.
     pub fn try_from_iter<I>(iterator: I) -> Result<Self, Error>
     where
@@ -1099,10 +1145,10 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
             let operand = EffectiveAddressOperand::try_from(&NasmStr(token))?;
             match &operand {
                 EffectiveAddressOperand::Immediate(immediate) => {
-                    if operator == EffectiveAddressOperator::Multiply && immediate.parsed() > 9 {
+                    if operator == EffectiveAddressOperator::Multiply && immediate.0 > 9 {
                         return Err(Error::CannotParseInstruction(format!(
                             "invalid effective address (scale can be at most 9, was {})",
-                            immediate.parsed()
+                            immediate.0
                         )));
                     }
                 }
@@ -1144,45 +1190,25 @@ impl TryFrom<OperandType> for EffectiveAddress {
 
 // FIXME: Should likely have Immediate8/16/32 variants in order to enforce sizes when executing
 //        instructions.
-// FIXME: This should really be unsigned.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Immediate {
-    raw: String,
-    parsed: i64,
-}
+pub struct Immediate(pub u32);
 
 impl Immediate {
-    pub fn new(parsed: i64, raw: String) -> Self {
-        Self { raw, parsed }
-    }
-
-    pub fn raw(&self) -> &str {
-        &self.raw
-    }
-
-    pub fn parsed(&self) -> i64 {
-        self.parsed
-    }
-
     pub fn infer_size(&self) -> Size {
-        const BYTE_LOW: i64 = i8::MIN as i64;
-        const BYTE_HIGH: i64 = i8::MAX as i64;
+        const BYTE_LOW: u32 = u8::MIN as u32;
+        const BYTE_HIGH: u32 = u8::MAX as u32;
 
-        const WORD_LOW: i64 = i16::MIN as i64;
-        const WORD_HIGH: i64 = i16::MAX as i64;
+        const WORD_LOW: u32 = u16::MIN as u32;
+        const WORD_HIGH: u32 = u16::MAX as u32;
 
-        const DWORD_LOW: i64 = i32::MIN as i64;
-        const DWORD_HIGH: i64 = i32::MAX as i64;
-
-        const QWORD_LOW: i64 = i64::MIN as i64;
-        const QWORD_HIGH: i64 = i64::MAX as i64;
+        const DWORD_LOW: u32 = u32::MIN;
+        const DWORD_HIGH: u32 = u32::MAX;
 
         use Size::*;
-        match self.parsed {
+        match self.0 {
             BYTE_LOW..=BYTE_HIGH => Byte,
             WORD_LOW..=WORD_HIGH => Word,
             DWORD_LOW..=DWORD_HIGH => Dword,
-            QWORD_LOW..=QWORD_HIGH => Qword,
         }
     }
 }
@@ -1211,16 +1237,13 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
         // 0x...              = hex
         // 0h...              = hex
         let parse = |trimmed_value: &str, radix: u32, radix_name: &str| {
-            let parsed = i64::from_str_radix(trimmed_value, radix).map_err(|_| {
+            let parsed = u32::from_str_radix(trimmed_value, radix).map_err(|_| {
                 Error::CannotParseInstruction(format!(
                     "could not parse {} as {}",
                     trimmed_value, radix_name
                 ))
             })?;
-            return Ok(Immediate {
-                raw: value.0.into(),
-                parsed,
-            });
+            return Ok(Immediate(parsed));
         };
 
         let to_parse = value.0.replace('_', "");
@@ -1256,14 +1279,18 @@ impl TryFrom<&NasmStr<'_>> for Immediate {
             }
         }
 
+        // We don't directly parse into `u32` because that would cause negative values to be
+        // invalid. We therefore need to first parse into an `i64` to preserve the full range of
+        // values possible, and then convert it to be unsigned, before then finally cast it to
+        // `u32`. I.e. an input of -1 should result in the maximum unsigned value.
+        // FIXME: Avoid going via `i64`.
         let parsed = to_parse.parse::<i64>().map_err(|_| {
-            Error::CannotParseInstruction(format!("invalid immediate value ({})", to_parse))
+            Error::CannotParseInstruction(format!("cannot parse {} as i64", to_parse))
         })?;
 
-        Ok(Immediate {
-            raw: to_parse,
-            parsed,
-        })
+        let parsed = parsed.as_unsigned() as u32;
+
+        Ok(Immediate(parsed))
     }
 }
 
@@ -1524,18 +1551,18 @@ pub(crate) enum RegisterOrMemory32<'a> {
 
 // TODO: test
 impl RegisterOrMemory32<'_> {
-    pub fn read32(&self, cpu: &Cpu) -> Result<u32, Error> {
+    pub fn read(&self, cpu: &Cpu) -> Result<u32, Error> {
         match self {
             Self::Register(register) => Ok(cpu.registers.read32(register)),
-            Self::Memory(effective_address) => cpu.memory.read32(effective_address.resolve()),
+            Self::Memory(effective_address) => cpu.memory.read32(effective_address.resolve(cpu)),
         }
     }
 
-    pub fn write32(&self, cpu: &mut Cpu, value: u32) -> Result<(), Error> {
+    pub fn write(&self, cpu: &mut Cpu, value: u32) -> Result<(), Error> {
         match self {
             Self::Register(register) => Ok(cpu.registers.write32(register, value)),
             Self::Memory(effective_address) => {
-                cpu.memory.write32(effective_address.resolve(), value)
+                cpu.memory.write32(effective_address.resolve(cpu), value)
             }
         }
     }
@@ -1577,18 +1604,18 @@ pub(crate) enum RegisterOrMemory16<'a> {
 
 // TODO: test
 impl RegisterOrMemory16<'_> {
-    pub fn read16(&self, cpu: &Cpu) -> Result<u16, Error> {
+    pub fn read(&self, cpu: &Cpu) -> Result<u16, Error> {
         match self {
             Self::Register(register) => Ok(cpu.registers.read16(register)),
-            Self::Memory(effective_address) => cpu.memory.read16(effective_address.resolve()),
+            Self::Memory(effective_address) => cpu.memory.read16(effective_address.resolve(cpu)),
         }
     }
 
-    pub fn write16(&self, cpu: &mut Cpu, value: u16) -> Result<(), Error> {
+    pub fn write(&self, cpu: &mut Cpu, value: u16) -> Result<(), Error> {
         match self {
             Self::Register(register) => Ok(cpu.registers.write16(register, value)),
             Self::Memory(effective_address) => {
-                cpu.memory.write16(effective_address.resolve(), value)
+                cpu.memory.write16(effective_address.resolve(cpu), value)
             }
         }
     }
@@ -1630,18 +1657,18 @@ pub(crate) enum RegisterOrMemory8<'a> {
 
 // TODO: test
 impl RegisterOrMemory8<'_> {
-    pub fn read8(&self, cpu: &Cpu) -> Result<u8, Error> {
+    pub fn read(&self, cpu: &Cpu) -> Result<u8, Error> {
         match self {
             Self::Register(register) => Ok(cpu.registers.read8(register)),
-            Self::Memory(effective_address) => cpu.memory.read8(effective_address.resolve()),
+            Self::Memory(effective_address) => cpu.memory.read8(effective_address.resolve(cpu)),
         }
     }
 
-    pub fn write8(&self, cpu: &mut Cpu, value: u8) -> Result<(), Error> {
+    pub fn write(&self, cpu: &mut Cpu, value: u8) -> Result<(), Error> {
         match self {
             Self::Register(register) => Ok(cpu.registers.write8(register, value)),
             Self::Memory(effective_address) => {
-                cpu.memory.write8(effective_address.resolve(), value)
+                cpu.memory.write8(effective_address.resolve(cpu), value)
             }
         }
     }
@@ -1697,22 +1724,30 @@ mod tests {
         // F::Fs,
         // F::Gs,
         // F::Ss,
+        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
         assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("3")).unwrap()]));
+        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
         assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("WORD 3")).unwrap()]));
         assert!(!F::Const3.matches(&vec![Operand::try_from(&NasmStr("4")).unwrap()]));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
         assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
         assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("32767")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 32767")).unwrap()]));
-        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("32768")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65535")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 65535")).unwrap()]));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65536")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("qword 1")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("[eax]")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("eax")).unwrap()]));
+        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
         assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("3")).unwrap()]));
+        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
         // F::Reg16,
         // F::Reg32,
         // F::Reg8Imm8,
@@ -1904,42 +1939,49 @@ mod tests {
         let expected = EffectiveAddress {
             raw: vec![(Add, eao!(imm "1"))],
             num_registers: 0,
+            register_size: None,
         };
         assert_eq!(ea!("[1]"), expected);
 
         let expected = EffectiveAddress {
             raw: vec![(Add, eao!(imm "1"))],
             num_registers: 0,
+            register_size: None,
         };
         assert_eq!(ea!("[+1]"), expected);
 
         let expected = EffectiveAddress {
             raw: vec![(Add, eao!(reg "eax"))],
             num_registers: 1,
+            register_size: Some(Size::Dword),
         };
         assert_eq!(ea!("[eax]"), expected);
 
         let expected = EffectiveAddress {
             raw: vec![(Add, eao!(reg "eax"))],
             num_registers: 1,
+            register_size: Some(Size::Dword),
         };
         assert_eq!(ea!("[     eAx     ]"), expected);
 
         let expected = EffectiveAddress {
             raw: vec![(Add, eao!(reg "eax")), (Add, eao!(reg "ebx"))],
             num_registers: 2,
+            register_size: Some(Size::Dword),
         };
         assert_eq!(ea!("[eax+ebx]"), expected);
 
         let expected = EffectiveAddress {
             raw: vec![(Add, eao!(reg "eax")), (Add, eao!(imm "4"))],
             num_registers: 1,
+            register_size: Some(Size::Dword),
         };
         assert_eq!(ea!("[ eax   +  4 ]"), expected);
 
         let expected = EffectiveAddress {
             raw: vec![(Add, eao!(reg "eax")), (Subtract, eao!(imm "10"))],
             num_registers: 1,
+            register_size: Some(Size::Dword),
         };
         assert_eq!(ea!("[eax-10]"), expected);
 
@@ -1950,6 +1992,7 @@ mod tests {
                 (Add, eao!(reg "ebx")),
             ],
             num_registers: 1,
+            register_size: Some(Size::Dword),
         };
         assert_eq!(ea!("[8*4+ebx]"), expected);
 
@@ -1967,6 +2010,7 @@ mod tests {
                 (Multiply, eao!(imm "0b1")),
             ],
             num_registers: 2,
+            register_size: Some(Size::Dword),
         };
         assert_eq!(
             ea!("[eax*2+4000q+2000h*8+0x8000+10d+020d+ebx*0b1]"),
@@ -1983,110 +2027,74 @@ mod tests {
 
         let to_parse = "0x200";
         let expected_parsed = 512;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "0h200";
         let expected_parsed = 512;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "000200h";
         let expected_parsed = 512;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "0d200h";
         let expected_parsed = 53760;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "0d200";
         let expected_parsed = 200;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "200d";
         let expected_parsed = 200;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "0q0200";
         let expected_parsed = 128;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "0b1100_1000";
         let expected_parsed = 200;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "0b11_100";
         let expected_parsed = 28;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "000000000000000000000000000000000000000000000000000000200q";
         let expected_parsed = 128;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse = "0b00101";
         let expected_parsed = 5;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
 
         let to_parse =
             "000000000000000000000000000000000000000000000000000000000000000000000000101b";
         let expected_parsed = 5;
-        let expected_immediate = Immediate {
-            raw: to_parse.into(),
-            parsed: expected_parsed,
-        };
+        let expected_immediate = Immediate(expected_parsed);
         let immediate = Immediate::try_from(&NasmStr(to_parse)).unwrap();
         assert_eq!(immediate, expected_immediate);
     }
@@ -2163,5 +2171,15 @@ mod tests {
     #[test]
     fn instruction_try_from_nasm_str() {
         // TODO
+    }
+
+    #[test]
+    fn immediate_infer_size() {
+        assert_eq!(Immediate(0).infer_size(), Size::Byte);
+        assert_eq!(Immediate(u8::MAX as u32).infer_size(), Size::Byte);
+        assert_eq!(Immediate(u8::MAX as u32 + 1).infer_size(), Size::Word);
+        assert_eq!(Immediate(u16::MAX as u32).infer_size(), Size::Word);
+        assert_eq!(Immediate(u16::MAX as u32 + 1).infer_size(), Size::Dword);
+        assert_eq!(Immediate(u32::MAX).infer_size(), Size::Dword);
     }
 }

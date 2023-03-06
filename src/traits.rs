@@ -2,6 +2,15 @@ use std::mem;
 
 use num_traits::{PrimInt, Unsigned, FromPrimitive};
 
+use crate::register::Registers;
+
+pub(crate) trait RegisterReadWrite {
+    type Value;
+
+    fn read(&self, registers: &Registers) -> Self::Value;
+    fn write(&self, registers: &mut Registers, value: Self::Value);
+}
+
 pub(crate) trait BitIndex {
     fn bit_at_index(self, index: u32) -> bool;
 }
