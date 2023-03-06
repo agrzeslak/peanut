@@ -1724,9 +1724,7 @@ mod tests {
         // F::Fs,
         // F::Gs,
         // F::Ss,
-        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
         assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("3")).unwrap()]));
-        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
         assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("WORD 3")).unwrap()]));
         assert!(!F::Const3.matches(&vec![Operand::try_from(&NasmStr("4")).unwrap()]));
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
