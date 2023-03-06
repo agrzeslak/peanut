@@ -112,10 +112,10 @@ impl InstructionOperandFormat {
         };
 
         // Validates that the immediate operand's size directive (if given) matches the target
-        // size. If no size directive is provided, then it is validates that the inferred size of
-        // the immediate value is smaller than, or equal to the target size.
+        // size. If no size directive is provided, then it is accepted regardless of whether it may
+        // be too large. In the case that it is, it will simply be truncated when used.
         let validate_immediate = |operand: &Operand, target_size: Size| -> bool {
-            let OperandType::Immediate(immediate) = &operand.operand_type else {
+            let OperandType::Immediate(_) = &operand.operand_type else {
                     return false;
                 };
 
@@ -123,7 +123,7 @@ impl InstructionOperandFormat {
                 return size_directive == &target_size;
             }
 
-            immediate.infer_size() <= target_size
+            true
         };
 
         // Validates that the register contained within this operand is of the specified
@@ -1730,7 +1730,7 @@ mod tests {
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
         assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
-        assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
         assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
@@ -1738,13 +1738,13 @@ mod tests {
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65535")).unwrap()]));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 65535")).unwrap()]));
-        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65536")).unwrap()]));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65536")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("qword 1")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("[eax]")).unwrap()]));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("eax")).unwrap()]));
         assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
-        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("3")).unwrap()]));
+        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
         assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
         // F::Reg16,
         // F::Reg32,
