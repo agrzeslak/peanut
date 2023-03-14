@@ -1,16 +1,14 @@
-use std::{fmt::Display, mem, u32};
+use std::{fmt::Display, u32};
 
 use bitmaps::Bitmap;
-use num_traits::{
-    CheckedAdd, CheckedSub, FromPrimitive, PrimInt, Unsigned, WrappingAdd, WrappingSub, Zero,
-};
+use num_traits::{CheckedAdd, FromPrimitive, PrimInt, Zero};
 use paste::paste;
 
 use crate::{
     cpu::Operation,
     error::Error,
     instruction::{NasmStr, OperandType, Size},
-    traits::{AsUnsigned, BitIndex, HighLowBytes32, MostSignificantBit, Signed, RegisterReadWrite},
+    traits::{AsUnsigned, BitIndex, HighLowBytes32, MostSignificantBit, RegisterReadWrite, Signed},
 };
 
 pub enum CurrentPrivilegeLevel {
