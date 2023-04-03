@@ -21,6 +21,6 @@ pub fn run() {
     let mut cpu = Cpu::default();
     for line in file_contents.lines() {
         let instruction = Instruction::try_from(&NasmStr(&line)).unwrap();
-        (instruction.cpu_function)(&mut cpu, &instruction);
+        (instruction.cpu_function)(&mut cpu, &instruction.operands);
     }
 }

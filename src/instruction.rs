@@ -101,7 +101,7 @@ impl InstructionOperandFormat {
     /// Checks whether the `InstructionOperandFormat` is compatible with the operands provided.
     /// I.e. can an instruction with this `InstructionOperandFormat` be executed on the operands
     /// provided.
-    pub fn matches(&self, operands: &Vec<Operand>) -> bool {
+    pub fn matches(&self, operands: &Operands) -> bool {
         // Validates that the operand is the correct immediate value.
         let validate_const = |operand: &Operand, target: u32| -> bool {
             if let OperandType::Immediate(immediate) = &operand.operand_type {
@@ -158,7 +158,7 @@ impl InstructionOperandFormat {
         };
 
         use InstructionOperandFormat as F;
-        match (self, operands.get(0), operands.get(1), operands.get(2)) {
+        match (self, operands.0.get(0), operands.0.get(1), operands.0.get(2)) {
             (F::Cs, Some(op), None, None) => {
                 op.operand_type == OperandType::Register(Register16::Cs.into())
             }
@@ -407,7 +407,7 @@ impl InstructionOperandFormat {
     }
 }
 
-type CpuFunction = fn(&mut Cpu, &Instruction);
+type CpuFunction = fn(&mut Cpu, &Operands);
 
 struct OperandFunctionMap {
     pub instruction_operand_format: InstructionOperandFormat,
@@ -446,7 +446,7 @@ impl<'a> InstructionDescriptor<'a> {
     // FIXME: Signature could be made more ergonomic by accepting a borrowed iterator in some form.
     pub fn lookup_using_mnemonic_and_operands(
         mnemonic: &str,
-        operands: &Vec<Operand>,
+        operands: &Operands,
     ) -> Result<CpuFunction, Error> {
         let mnemonic = mnemonic.to_uppercase();
         let candidates: Vec<_> = INSTRUCTION_DESCRIPTORS
@@ -473,7 +473,7 @@ impl<'a> InstructionDescriptor<'a> {
     /// exists.
     pub fn resolve_matching_cpu_function(
         &self,
-        operands: &Vec<Operand>,
+        operands: &Operands,
     ) -> Result<Option<CpuFunction>, Error> {
         let mut cpu_function = None;
 
@@ -800,13 +800,13 @@ const INSTRUCTION_DESCRIPTORS: [InstructionDescriptor; 254] = [
     build!(0x85, "", (), (), (), false),
     build!(0x86, "", (), (), (), false),
     build!(0x87, "", (), (), (), false),
-    build!(0x88, "", (), (), (), false),
-    build!(0x89, "", (), (), (), false),
-    build!(0x8a, "", (), (), (), false),
-    build!(0x8b, "", (), (), (), false),
-    build!(0x8c, "", (), (), (), false),
+    build!(0x88, "MOV", (Rm8Reg8, mov_rm8_reg8), (), (), false),
+    build!(0x89, "MOV", (), (Rm16Reg16, mov_rm16_reg16), (Reg32Rm32, mov_rm32_reg32), false),
+    build!(0x8a, "MOV", (Reg8Rm8, mov_reg8_rm8), (), (), false),
+    build!(0x8b, "MOV", (), (Reg16Rm16, mov_reg16_rm16), (Reg32Rm32, mov_reg32_rm32), false),
+    build!(0x8c, "MOV", (), (), (), false),
     build!(0x8d, "", (), (), (), false),
-    build!(0x8e, "", (), (), (), false),
+    build!(0x8e, "MOV", (), (), (), false),
     build!(0x8f, "", (), (), (), false),
     build!(0x90, "", (), (), (), false),
     build!(0x91, "", (), (), (), false),
@@ -1453,15 +1453,17 @@ pub struct NasmStr<'a>(pub &'a str);
 
 pub struct Instruction {
     pub mnemonic: String,
-    pub operands: Vec<Operand>,
+    pub operands: Operands,
     pub cpu_function: CpuFunction,
 }
 
-impl Instruction {
+pub struct Operands(pub Vec<Operand>);
+
+impl Operands {
     /// Unwrap the operand at the given index as an `Immediate`, otherwise panic.
     pub(crate) fn unwrap_immediate(&self, index: usize) -> &Immediate {
         &self
-            .operands
+            .0
             .get(index)
             .unwrap()
             .operand_type
@@ -1471,7 +1473,7 @@ impl Instruction {
     /// Unwrap the operand at the given index as an `EffectiveAddress`, otherwise panic.
     pub(crate) fn unwrap_effective_address(&self, index: usize) -> &EffectiveAddress {
         &self
-            .operands
+            .0
             .get(index)
             .unwrap()
             .operand_type
@@ -1481,7 +1483,7 @@ impl Instruction {
     /// Unwrap the operand at the given index as a `Register`, otherwise panic.
     pub(crate) fn unwrap_register(&self, index: usize) -> &Register {
         &self
-            .operands
+            .0
             .get(index)
             .unwrap()
             .operand_type
@@ -1489,29 +1491,35 @@ impl Instruction {
     }
 }
 
+impl From<Vec<Operand>> for Operands {
+    fn from(operands: Vec<Operand>) -> Self {
+        Self(operands)
+    }
+}
+
 macro_rules! unwrap_operands {
-    ($instruction:ident, $type1:ty) => {
-        <$type1>::try_from(&$instruction.operands[0].operand_type).unwrap()
+    ($operands:ident, $type1:ty) => {
+        <$type1>::try_from(&$operands.0[0].operand_type).unwrap()
     };
-    ($instruction:ident, $type1:ty, $type2:ty) => {
+    ($operands:ident, $type1:ty, $type2:ty) => {
         (
-            <$type1>::try_from(&$instruction.operands[0].operand_type).unwrap(),
-            <$type2>::try_from(&$instruction.operands[1].operand_type).unwrap(),
+            <$type1>::try_from(&$operands.0[0].operand_type).unwrap(),
+            <$type2>::try_from(&$operands.0[1].operand_type).unwrap(),
         )
     };
-    ($instruction:ident, $type1:ty, $type2:ty, $type3:ty) => {
+    ($operands:ident, $type1:ty, $type2:ty, $type3:ty) => {
         (
-            <$type1>::try_from(&$instruction.operands[0].operand_type).unwrap(),
-            <$type2>::try_from(&$instruction.operands[1].operand_type).unwrap(),
-            <$type3>::try_from(&$instruction.operands[2].operand_type).unwrap(),
+            <$type1>::try_from(&$operands.0[0].operand_type).unwrap(),
+            <$type2>::try_from(&$operands.0[1].operand_type).unwrap(),
+            <$type3>::try_from(&$operands.0[2].operand_type).unwrap(),
         )
     };
-    ($instruction:ident, $type1:ty, $type2:ty, $type3:ty, $type4:ty) => {
+    ($operands:ident, $type1:ty, $type2:ty, $type3:ty, $type4:ty) => {
         (
-            <$type1>::try_from(&$instruction.operands[0].operand_type).unwrap(),
-            <$type2>::try_from(&$instruction.operands[1].operand_type).unwrap(),
-            <$type3>::try_from(&$instruction.operands[2].operand_type).unwrap(),
-            <$type4>::try_from(&$instruction.operands[3].operand_type).unwrap(),
+            <$type1>::try_from(&$operands.0[0].operand_type).unwrap(),
+            <$type2>::try_from(&$operands.0[1].operand_type).unwrap(),
+            <$type3>::try_from(&$operands.0[2].operand_type).unwrap(),
+            <$type4>::try_from(&$operands.0[3].operand_type).unwrap(),
         )
     };
 }
@@ -1534,6 +1542,7 @@ impl<'a> TryFrom<&NasmStr<'a>> for Instruction {
             .split(",")
             .map(|o| Operand::try_from(&NasmStr(o.trim())))
             .collect::<Result<_, _>>()?;
+        let operands = Operands(operands);
 
         let cpu_function =
             InstructionDescriptor::lookup_using_mnemonic_and_operands(mnemonic, &operands)?;
@@ -1721,36 +1730,36 @@ mod tests {
         //     };
         // }
 
-        assert!(F::Cs.matches(&vec![Operand::try_from(&NasmStr("Cs")).unwrap()]));
-        assert!(!F::Cs.matches(&vec![Operand::try_from(&NasmStr("Ds")).unwrap()]));
+        assert!(F::Cs.matches(&vec![Operand::try_from(&NasmStr("Cs")).unwrap()].into()));
+        assert!(!F::Cs.matches(&vec![Operand::try_from(&NasmStr("Ds")).unwrap()].into()));
         // F::Es,
         // F::Fs,
         // F::Gs,
         // F::Ss,
-        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("3")).unwrap()]));
-        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("WORD 3")).unwrap()]));
-        assert!(!F::Const3.matches(&vec![Operand::try_from(&NasmStr("4")).unwrap()]));
-        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
-        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
-        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("byte 1")).unwrap()]));
-        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
-        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("byte -1")).unwrap()]));
-        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
-        assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65535")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 65535")).unwrap()]));
-        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65536")).unwrap()]));
-        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()]));
-        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("qword 1")).unwrap()]));
-        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("[eax]")).unwrap()]));
-        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("eax")).unwrap()]));
-        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()]));
-        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()]));
-        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()]));
+        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("3")).unwrap()].into()));
+        assert!(F::Const3.matches(&vec![Operand::try_from(&NasmStr("WORD 3")).unwrap()].into()));
+        assert!(!F::Const3.matches(&vec![Operand::try_from(&NasmStr("4")).unwrap()].into()));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()].into()));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()].into()));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("byte 1")).unwrap()].into()));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()].into()));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("byte -1")).unwrap()].into()));
+        assert!(F::Imm8.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()].into()));
+        assert!(!F::Imm8.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()].into()));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()].into()));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()].into()));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()].into()));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("256")).unwrap()].into()));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65535")).unwrap()].into()));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 65535")).unwrap()].into()));
+        assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65536")).unwrap()].into()));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()].into()));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("qword 1")).unwrap()].into()));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("[eax]")).unwrap()].into()));
+        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("eax")).unwrap()].into()));
+        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()].into()));
+        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("1")).unwrap()].into()));
+        assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("-1")).unwrap()].into()));
         // F::Reg16,
         // F::Reg32,
         // F::Reg8Imm8,
