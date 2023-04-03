@@ -144,7 +144,6 @@ mod tests {
         assert_eq!(modrm.resolve_register(&Dword), Register32::Eax.into());
 
         modrm.0 = reg_001;
-        dbg!(&modrm);
         assert_eq!(modrm.resolve_register(&Byte), Register8::Cl.into());
         assert_eq!(modrm.resolve_register(&Word), Register16::Cx.into());
         assert_eq!(modrm.resolve_register(&Dword), Register32::Ecx.into());

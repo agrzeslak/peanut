@@ -2,7 +2,7 @@ use crate::{
     cpu::Cpu,
     error::Error,
     register::{Register, Register16, Register32, Register8},
-    traits::{RegisterReadWrite, AsUnsigned},
+    traits::{AsUnsigned, RegisterReadWrite},
 };
 
 #[derive(Debug)]
