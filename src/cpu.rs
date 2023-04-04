@@ -5,7 +5,7 @@ use num_traits::{FromPrimitive, PrimInt, WrappingAdd, WrappingSub};
 use crate::{
     instruction::{
         unwrap_operands, Immediate, RegisterOrMemory16, RegisterOrMemory32,
-        RegisterOrMemory8, Operands,
+        RegisterOrMemory8, Operands, EffectiveAddress,
     },
     memory::Memory,
     register::{Register16, Register32, Register8, Registers, WithCarry},
@@ -287,6 +287,16 @@ impl Cpu {
 
     pub(crate) fn daa(&mut self, operands: &Operands) {
         todo!()
+    }
+
+    pub(crate) fn lea_reg16_mem(&mut self, operands: &Operands) {
+        let (reg16, mem) = unwrap_operands!(operands, &Register16, &EffectiveAddress);
+        self.registers.write16(reg16, mem.resolve(self) as u16);
+    }
+
+    pub(crate) fn lea_reg32_mem(&mut self, operands: &Operands) {
+        let (reg32, mem) = unwrap_operands!(operands, &Register32, &EffectiveAddress);
+        self.registers.write32(reg32, mem.resolve(self));
     }
 
     pub(crate) fn mov_rm8_reg8(&mut self, operands: &Operands) {

@@ -45,8 +45,8 @@ enum InstructionOperandFormat {
     Reg16Rm16Imm16,
     Reg32Rm32Imm8,
     Reg32Rm32Imm32,
-    Reg16Mem16,
-    Reg32Mem32,
+    Reg16Mem,
+    Reg32Mem,
     SregRm16,
     SregRm32,
     Rm8Const1,
@@ -139,11 +139,21 @@ impl InstructionOperandFormat {
         };
 
         // Validates that the operand containing this effective address either does not have a size
-        // directive, or that it has a matching size directive.
-        let validate_memory = |operand: &Operand, target_size: Size| -> bool {
+        // directive, or that it has a matching size directive. If `target_size` is `None`, then we
+        // do not perform any size checks.
+        let validate_memory = |operand: &Operand, target_size: Option<Size>| -> bool {
+            let OperandType::Memory(_) = &operand.operand_type else {
+                return false;
+            };
+
+            let Some(target_size) = target_size else {
+                return true;
+            };
+
             if let Some(size_directive) = &operand.size_directive {
                 return size_directive == &target_size;
             }
+
             true
         };
 
@@ -151,14 +161,24 @@ impl InstructionOperandFormat {
         // register, it should also be of the specified `target_size`.
         let validate_register_or_memory = |operand: &Operand, target_size: Size| -> bool {
             match &operand.operand_type {
-                OperandType::Memory(_) => true,
+                OperandType::Memory(_) => {
+                    let Some(size_directive) = &operand.size_directive else {
+                        return true;
+                    };
+                    size_directive == &target_size
+                },
                 OperandType::Register(register) => register.size() == target_size,
                 _ => false,
             }
         };
 
         use InstructionOperandFormat as F;
-        match (self, operands.0.get(0), operands.0.get(1), operands.0.get(2)) {
+        match (
+            self,
+            operands.0.get(0),
+            operands.0.get(1),
+            operands.0.get(2),
+        ) {
             (F::Cs, Some(op), None, None) => {
                 op.operand_type == OperandType::Register(Register16::Cs.into())
             }
@@ -254,11 +274,11 @@ impl InstructionOperandFormat {
                     && validate_register_or_memory(op2, Size::Dword)
                     && validate_immediate(op3, Size::Dword)
             }
-            (F::Reg16Mem16, Some(op1), Some(op2), None) => {
-                validate_register(op1, Size::Word) && validate_memory(op2, Size::Word)
+            (F::Reg16Mem, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Word) && validate_memory(op2, None)
             }
-            (F::Reg32Mem32, Some(op1), Some(op2), None) => {
-                validate_register(op1, Size::Dword) && validate_memory(op2, Size::Dword)
+            (F::Reg32Mem, Some(op1), Some(op2), None) => {
+                validate_register(op1, Size::Dword) && validate_memory(op2, None)
             }
             // (F::SregRm16, Some(op), None, None) => {},
             // (F::SregRm32, Some(op), None, None) => {},
@@ -801,11 +821,25 @@ const INSTRUCTION_DESCRIPTORS: [InstructionDescriptor; 254] = [
     build!(0x86, "", (), (), (), false),
     build!(0x87, "", (), (), (), false),
     build!(0x88, "MOV", (Rm8Reg8, mov_rm8_reg8), (), (), false),
-    build!(0x89, "MOV", (), (Rm16Reg16, mov_rm16_reg16), (Reg32Rm32, mov_rm32_reg32), false),
+    build!(
+        0x89,
+        "MOV",
+        (),
+        (Rm16Reg16, mov_rm16_reg16),
+        (Reg32Rm32, mov_rm32_reg32),
+        false
+    ),
     build!(0x8a, "MOV", (Reg8Rm8, mov_reg8_rm8), (), (), false),
-    build!(0x8b, "MOV", (), (Reg16Rm16, mov_reg16_rm16), (Reg32Rm32, mov_reg32_rm32), false),
+    build!(
+        0x8b,
+        "MOV",
+        (),
+        (Reg16Rm16, mov_reg16_rm16),
+        (Reg32Rm32, mov_reg32_rm32),
+        false
+    ),
     build!(0x8c, "MOV", (), (), (), false),
-    build!(0x8d, "", (), (), (), false),
+    build!(0x8d, "LEA", (), (Reg16Mem, lea_reg16_mem), (Reg32Mem, lea_reg32_mem), false),
     build!(0x8e, "MOV", (), (), (), false),
     build!(0x8f, "", (), (), (), false),
     build!(0x90, "", (), (), (), false),
@@ -999,13 +1033,7 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
 //        https://stackoverflow.com/questions/34058101/referencing-the-contents-of-a-memory-location-x86-addressing-modes/34058400#34058400
 // TODO: Should this just be SIB?
 // TODO: Tests. Also ensure that EIP cannot be used.
-// TODO: Restructure as follows: NasmStr to be parsed into a ??? (perhaps EffectiveAddressBuilder),
-//       which may contain additional information used for parsing, but that is not relevant to the
-//       final effective address. This then finally yields an effective address which is guaranteed
-//       to be valid. This can then be `.resolve()`d in order to do the equivalent of dereferencing
-//       a pointer, i.e. extracting addresses stored within registers to perform the final
-//       arithmetic. If there is nothing to derefence and it's simply a static value then that's
-//       even simpler.
+// TODO: Remove num_registers and register_size, which are only used during creation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EffectiveAddress {
     raw: Vec<(EffectiveAddressOperator, EffectiveAddressOperand)>,
@@ -1175,10 +1203,10 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddress {
     }
 }
 
-impl TryFrom<OperandType> for EffectiveAddress {
+impl<'a> TryFrom<&'a OperandType> for &'a EffectiveAddress {
     type Error = Error;
 
-    fn try_from(operand_type: OperandType) -> Result<Self, Self::Error> {
+    fn try_from(operand_type: &'a OperandType) -> Result<Self, Self::Error> {
         match operand_type {
             OperandType::Immediate(_) => Err(Error::CannotCovertType(
                 "an immediate was provided when a memory reference was expected".into(),
@@ -1462,12 +1490,7 @@ pub struct Operands(pub Vec<Operand>);
 impl Operands {
     /// Unwrap the operand at the given index as an `Immediate`, otherwise panic.
     pub(crate) fn unwrap_immediate(&self, index: usize) -> &Immediate {
-        &self
-            .0
-            .get(index)
-            .unwrap()
-            .operand_type
-            .unwrap_immediate()
+        &self.0.get(index).unwrap().operand_type.unwrap_immediate()
     }
 
     /// Unwrap the operand at the given index as an `EffectiveAddress`, otherwise panic.
@@ -1482,12 +1505,7 @@ impl Operands {
 
     /// Unwrap the operand at the given index as a `Register`, otherwise panic.
     pub(crate) fn unwrap_register(&self, index: usize) -> &Register {
-        &self
-            .0
-            .get(index)
-            .unwrap()
-            .operand_type
-            .unwrap_register()
+        &self.0.get(index).unwrap().operand_type.unwrap_register()
     }
 }
 

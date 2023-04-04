@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::{error::Error, instruction::OperandType};
 
 // u32 rather than usize as we are emulating 32-bit x86. In other words, in the context of
 // operating within the emulator, u32 is usize.
