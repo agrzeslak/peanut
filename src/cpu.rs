@@ -615,6 +615,24 @@ mod tests {
         };
     }
 
+    macro_rules! operands {
+        () => { Operands(vec![]) };
+        ($operand:literal) => { Operands(vec![Operand::try_from(&NasmStr($operand)).unwrap()])};
+        ($operand_a:literal, $operand_b:literal) => {
+            {
+                let mut operands = operands!($operand_a);
+                operands.0.append(&mut operands!($operand_b).0);
+                operands
+            }
+        };
+        ($operand:literal, $($tail:tt)*) => {
+            {
+                operands!($operand).0.append(&mut operands!($($tail)*).0)
+            }
+        };
+    }
+
+
     // https://stackoverflow.com/questions/8965923/carry-overflow-subtraction-in-x86#8982549
     //       A                   B                   A + B              Flags
     // ---------------     ----------------    ---------------      -----------------
@@ -864,21 +882,20 @@ mod tests {
         );
     }
 
-    macro_rules! operands {
-        () => { Operands(vec![]) };
-        ($operand:literal) => { Operands(vec![Operand::try_from(&NasmStr($operand)).unwrap()])};
-        ($operand_a:literal, $operand_b:literal) => {
-            {
-                let mut operands = operands!($operand_a);
-                operands.0.append(&mut operands!($operand_b).0);
-                operands
-            }
-        };
-        ($operand:literal, $($tail:tt)*) => {
-            {
-                operands!($operand).0.append(&mut operands!($($tail)*).0)
-            }
-        };
+    #[test]
+    fn lea_reg16_mem() {
+        let mut cpu = Cpu::default();
+        cpu.registers.set_ebx(10);
+        cpu.lea_reg16_mem(&operands!("ax", "[ebx]"));
+        assert_eq!(cpu.registers.get_ax(), 10);
+    }
+
+    #[test]
+    fn lea_reg32_mem() {
+        let mut cpu = Cpu::default();
+        cpu.registers.set_ebx(10);
+        cpu.lea_reg32_mem(&operands!("eax", "[ebx]"));
+        assert_eq!(cpu.registers.get_eax(), 10);
     }
 
     #[test]

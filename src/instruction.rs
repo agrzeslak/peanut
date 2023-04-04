@@ -166,7 +166,7 @@ impl InstructionOperandFormat {
                         return true;
                     };
                     size_directive == &target_size
-                },
+                }
                 OperandType::Register(register) => register.size() == target_size,
                 _ => false,
             }
@@ -839,7 +839,14 @@ const INSTRUCTION_DESCRIPTORS: [InstructionDescriptor; 254] = [
         false
     ),
     build!(0x8c, "MOV", (), (), (), false),
-    build!(0x8d, "LEA", (), (Reg16Mem, lea_reg16_mem), (Reg32Mem, lea_reg32_mem), false),
+    build!(
+        0x8d,
+        "LEA",
+        (),
+        (Reg16Mem, lea_reg16_mem),
+        (Reg32Mem, lea_reg32_mem),
+        false
+    ),
     build!(0x8e, "MOV", (), (), (), false),
     build!(0x8f, "", (), (), (), false),
     build!(0x90, "", (), (), (), false),
@@ -956,8 +963,10 @@ const INSTRUCTION_DESCRIPTORS: [InstructionDescriptor; 254] = [
 ];
 
 // FIXME: create hashtable or some other faster lookup method and use that.
-// TODO: I don't understand how assemblers choose which opcode to use when multiple would match.
-//       For example ADD r8, rm8 vs ADD rm8, r8. How does ADD al, bl choose which one is correct?
+// FIXME: I don't understand how assemblers choose which opcode to use when multiple would match.
+//        For example ADD r8, rm8 vs ADD rm8, r8. How does ADD al, bl choose which one is correct?
+//        This is already proving to be an issue with instructions such as `MOV`, as we are
+//        returning an `AmbiguousInstruction` error.
 pub(crate) fn lookup_instructions_by_mnemonic(mnemonic: &str) -> Vec<&InstructionDescriptor> {
     let mnemonic = mnemonic.to_uppercase();
     INSTRUCTION_DESCRIPTORS
@@ -1003,6 +1012,8 @@ impl TryFrom<&NasmStr<'_>> for EffectiveAddressOperand {
             return Ok(Self::Immediate(immediate));
         }
 
+        // FIXME: [bx] appears to actually be valid. No idea why. No other non-32-bit register
+        //        seems to work. Also need to update tests if fixed.
         if let Ok(register) = Register::try_from(value) {
             match register {
                 Register::Register32(_) => return Ok(Self::Register(register)),
