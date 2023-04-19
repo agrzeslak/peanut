@@ -395,54 +395,84 @@ impl Cpu {
     pub(crate) fn pop_ds(&mut self, operands: &Operands) {
         let ds = unwrap_operands!(operands, &Register16);
         let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(&Size::Dword);
+        self.registers.shrink_stack(&Size::Word);
         ds.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_es(&mut self, operands: &Operands) {
         let es = unwrap_operands!(operands, &Register16);
         let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(&Size::Dword);
+        self.registers.shrink_stack(&Size::Word);
         es.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_ss(&mut self, operands: &Operands) {
         let ss = unwrap_operands!(operands, &Register16);
         let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(&Size::Dword);
+        self.registers.shrink_stack(&Size::Word);
         ss.write(&mut self.registers, popped);
     }
 
     pub(crate) fn push_cs(&mut self, operands: &Operands) {
         let cs = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(&Size::Dword);
+        self.registers.grow_stack(&Size::Word);
         self.memory
-            .write16(self.registers.esp, cs.read(&mut self.registers))
+            .write16(self.registers.esp, cs.read(&self.registers))
             .unwrap();
     }
 
     pub(crate) fn push_ds(&mut self, operands: &Operands) {
         let ds = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(&Size::Dword);
+        self.registers.grow_stack(&Size::Word);
         self.memory
-            .write16(self.registers.esp, ds.read(&mut self.registers))
+            .write16(self.registers.esp, ds.read(&self.registers))
             .unwrap();
     }
 
     pub(crate) fn push_es(&mut self, operands: &Operands) {
         let es = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(&Size::Dword);
+        self.registers.grow_stack(&Size::Word);
         self.memory
-            .write16(self.registers.esp, es.read(&mut self.registers))
+            .write16(self.registers.esp, es.read(&self.registers))
             .unwrap();
     }
 
     pub(crate) fn push_ss(&mut self, operands: &Operands) {
         let ss = unwrap_operands!(operands, &Register16);
+        self.registers.grow_stack(&Size::Word);
+        self.memory
+            .write16(self.registers.esp, ss.read(&self.registers))
+            .unwrap();
+    }
+
+    pub(crate) fn push_reg16(&mut self, operands: &Operands) {
+        let reg16 = unwrap_operands!(operands, &Register16);
+        self.registers.grow_stack(&Size::Word);
+        self.memory
+            .write16(self.registers.esp, reg16.read(&self.registers))
+            .unwrap();
+    }
+
+    pub(crate) fn push_reg32(&mut self, operands: &Operands) {
+        let reg32 = unwrap_operands!(operands, &Register32);
         self.registers.grow_stack(&Size::Dword);
         self.memory
-            .write16(self.registers.esp, ss.read(&mut self.registers))
+            .write32(self.registers.esp, reg32.read(&self.registers))
             .unwrap();
+    }
+
+    pub(crate) fn pop_reg16(&mut self, operands: &Operands) {
+        let reg16 = unwrap_operands!(operands, &Register16);
+        let popped = self.memory.read16(self.registers.esp).unwrap();
+        self.registers.shrink_stack(&Size::Word);
+        reg16.write(&mut self.registers, popped);
+    }
+
+    pub(crate) fn pop_reg32(&mut self, operands: &Operands) {
+        let reg32 = unwrap_operands!(operands, &Register32);
+        let popped = self.memory.read32(self.registers.esp).unwrap();
+        self.registers.shrink_stack(&Size::Dword);
+        reg32.write(&mut self.registers, popped);
     }
 
     /// Integer subtraction with borrow. Adds the source and the carry flag, and subtracts the

@@ -267,13 +267,13 @@ impl Default for Eflags {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Register32 {
     Eax,
-    Ebx,
     Ecx,
     Edx,
+    Ebx,
+    Esp,
+    Ebp,
     Esi,
     Edi,
-    Ebp,
-    Esp,
 }
 
 impl RegisterReadWrite for Register32 {
@@ -293,13 +293,13 @@ impl Display for Register32 {
         use Register32::*;
         let register = match self {
             Eax => "EAX",
-            Ebx => "EBX",
             Ecx => "ECX",
             Edx => "EDX",
+            Ebx => "EBX",
+            Esp => "ESP",
+            Ebp => "EBP",
             Esi => "ESI",
             Edi => "EDI",
-            Ebp => "EBP",
-            Esp => "ESP",
         };
 
         write!(f, "{register}")
@@ -341,13 +341,13 @@ impl TryFrom<&NasmStr<'_>> for Register32 {
         use Register32::*;
         match value.0.to_uppercase().as_str() {
             "EAX" => Ok(Eax),
-            "EBX" => Ok(Ebx),
             "ECX" => Ok(Ecx),
             "EDX" => Ok(Edx),
+            "EBX" => Ok(Ebx),
+            "ESP" => Ok(Esp),
+            "EBP" => Ok(Ebp),
             "ESI" => Ok(Esi),
             "EDI" => Ok(Edi),
-            "EBP" => Ok(Ebp),
-            "ESP" => Ok(Esp),
             _ => Err(Error::CannotParseInstruction(format!(
                 "{} is not a valid 32-bit register",
                 value.0
@@ -618,11 +618,6 @@ impl TryFrom<&NasmStr<'_>> for Register {
             "AH" => Ok(Register8::Ah.into()),
             "AL" => Ok(Register8::Al.into()),
 
-            "EBX" => Ok(Register32::Ebx.into()),
-            "BX" => Ok(Register16::Bx.into()),
-            "BH" => Ok(Register8::Bh.into()),
-            "BL" => Ok(Register8::Bl.into()),
-
             "ECX" => Ok(Register32::Ecx.into()),
             "CX" => Ok(Register16::Cx.into()),
             "CH" => Ok(Register8::Ch.into()),
@@ -633,17 +628,22 @@ impl TryFrom<&NasmStr<'_>> for Register {
             "DH" => Ok(Register8::Dh.into()),
             "DL" => Ok(Register8::Dl.into()),
 
+            "EBX" => Ok(Register32::Ebx.into()),
+            "BX" => Ok(Register16::Bx.into()),
+            "BH" => Ok(Register8::Bh.into()),
+            "BL" => Ok(Register8::Bl.into()),
+
+            "ESP" => Ok(Register32::Esp.into()),
+            "SP" => Ok(Register16::Sp.into()),
+
+            "EBP" => Ok(Register32::Ebp.into()),
+            "BP" => Ok(Register16::Bp.into()),
+
             "ESI" => Ok(Register32::Esi.into()),
             "SI" => Ok(Register16::Si.into()),
 
             "EDI" => Ok(Register32::Edi.into()),
             "DI" => Ok(Register16::Di.into()),
-
-            "EBP" => Ok(Register32::Ebp.into()),
-            "BP" => Ok(Register16::Bp.into()),
-
-            "ESP" => Ok(Register32::Esp.into()),
-            "SP" => Ok(Register16::Sp.into()),
 
             "CS" => Ok(Register16::Cs.into()),
             "DS" => Ok(Register16::Ds.into()),
@@ -679,13 +679,13 @@ impl<'a> TryFrom<&'a OperandType> for &'a Register {
 #[derive(Clone, Debug, Default)]
 pub struct Registers {
     pub(crate) eax: u32,
-    pub(crate) ebx: u32,
     pub(crate) ecx: u32,
     pub(crate) edx: u32,
+    pub(crate) ebx: u32,
+    pub(crate) esp: u32,
+    pub(crate) ebp: u32,
     pub(crate) esi: u32,
     pub(crate) edi: u32,
-    pub(crate) ebp: u32,
-    pub(crate) esp: u32,
     pub(crate) cs: u16,
     pub(crate) ds: u16,
     pub(crate) es: u16,
@@ -789,13 +789,13 @@ impl Registers {
         use Register32::*;
         match register {
             Eax => self.get_eax(),
-            Ebx => self.get_ebx(),
             Ecx => self.get_ecx(),
             Edx => self.get_edx(),
+            Ebx => self.get_ebx(),
+            Esp => self.esp,
+            Ebp => self.ebp,
             Esi => self.esi,
             Edi => self.edi,
-            Ebp => self.ebp,
-            Esp => self.esp,
         }
     }
 
@@ -803,13 +803,13 @@ impl Registers {
         use Register32::*;
         match register {
             Eax => self.set_eax(value),
-            Ebx => self.set_ebx(value),
             Ecx => self.set_ecx(value),
             Edx => self.set_edx(value),
+            Ebx => self.set_ebx(value),
+            Esp => self.esp = value,
+            Ebp => self.ebp = value,
             Esi => self.esi = value,
             Edi => self.edi = value,
-            Ebp => self.ebp = value,
-            Esp => self.esp = value,
         }
     }
 
@@ -913,11 +913,6 @@ mod tests {
     }
 
     #[test]
-    fn ebx_get_and_set() {
-        test_abcd_register_accessors!(b);
-    }
-
-    #[test]
     fn ecx_get_and_set() {
         test_abcd_register_accessors!(c);
     }
@@ -925,6 +920,11 @@ mod tests {
     #[test]
     fn edx_get_and_set() {
         test_abcd_register_accessors!(d);
+    }
+
+    #[test]
+    fn ebx_get_and_set() {
+        test_abcd_register_accessors!(b);
     }
 
     #[test]
