@@ -1410,7 +1410,6 @@ pub enum Size {
     Byte = 8,
     Word = 16,
     Dword = 32,
-    Qword = 64,
 }
 
 impl TryFrom<&NasmStr<'_>> for Size {
@@ -1422,7 +1421,6 @@ impl TryFrom<&NasmStr<'_>> for Size {
             "BYTE" => Ok(Byte),
             "WORD" => Ok(Word),
             "DWORD" => Ok(Dword),
-            "QWORD" => Ok(Qword),
             value @ _ => Err(Error::CannotParseInstruction(format!(
                 "cannot convert {} into a valid size",
                 value
@@ -1783,7 +1781,6 @@ mod tests {
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("word 65535")).unwrap()].into()));
         assert!(F::Imm16.matches(&vec![Operand::try_from(&NasmStr("65536")).unwrap()].into()));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("dword 1")).unwrap()].into()));
-        assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("qword 1")).unwrap()].into()));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("[eax]")).unwrap()].into()));
         assert!(!F::Imm16.matches(&vec![Operand::try_from(&NasmStr("eax")).unwrap()].into()));
         assert!(F::Imm32.matches(&vec![Operand::try_from(&NasmStr("0")).unwrap()].into()));
@@ -2180,9 +2177,6 @@ mod tests {
 
         let expected = Operand::new(ot!(reg "eax"), None);
         assert_eq!(o!("byte EAX"), expected);
-
-        let expected = Operand::new(ot!(mem "[EAX+EBX*4+0x10]"), Some(Size::Qword));
-        assert_eq!(o!("    qWORd     [EAX+EBX*4+0x10]"), expected);
     }
 
     macro_rules! assert_size_err {
@@ -2206,7 +2200,6 @@ mod tests {
         assert_eq!(size!("bYtE"), Size::Byte);
         assert_eq!(size!("WORD"), Size::Word);
         assert_eq!(size!("dword"), Size::Dword);
-        assert_eq!(size!("QworD"), Size::Qword);
     }
 
     #[test]

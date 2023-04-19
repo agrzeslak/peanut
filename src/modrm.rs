@@ -33,56 +33,46 @@ pub struct ModRM(Bitmap<8>);
 impl ModRM {
     pub fn resolve_register(&self, size: &Size) -> Register {
         use Size::*;
-        // FIXME: find a better approach than panicking if a qword is provided. Possible separate
-        //        size type.
         match (self.0.get(5), self.0.get(4), self.0.get(3)) {
             (false, false, false) => match size {
                 Byte => Register8::Al.into(),
                 Word => Register16::Ax.into(),
                 Dword => Register32::Eax.into(),
-                Qword => unimplemented!(),
             },
             (false, false, true) => match size {
                 Byte => Register8::Cl.into(),
                 Word => Register16::Cx.into(),
                 Dword => Register32::Ecx.into(),
-                Qword => unimplemented!(),
             },
             (false, true, false) => match size {
                 Byte => Register8::Dl.into(),
                 Word => Register16::Dx.into(),
                 Dword => Register32::Edx.into(),
-                Qword => unimplemented!(),
             },
             (false, true, true) => match size {
                 Byte => Register8::Bl.into(),
                 Word => Register16::Bx.into(),
                 Dword => Register32::Ebx.into(),
-                Qword => unimplemented!(),
             },
             (true, false, false) => match size {
                 Byte => Register8::Ah.into(),
                 Word => Register16::Sp.into(),
                 Dword => Register32::Esp.into(),
-                Qword => unimplemented!(),
             },
             (true, false, true) => match size {
                 Byte => Register8::Ch.into(),
                 Word => Register16::Bp.into(),
                 Dword => Register32::Ebp.into(),
-                Qword => unimplemented!(),
             },
             (true, true, false) => match size {
                 Byte => Register8::Dh.into(),
                 Word => Register16::Si.into(),
                 Dword => Register32::Esi.into(),
-                Qword => unimplemented!(),
             },
             (true, true, true) => match size {
                 Byte => Register8::Bh.into(),
                 Word => Register16::Di.into(),
                 Dword => Register32::Edi.into(),
-                Qword => unimplemented!(),
             },
         }
     }
