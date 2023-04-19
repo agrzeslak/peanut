@@ -4,8 +4,8 @@ use num_traits::{FromPrimitive, PrimInt, WrappingAdd, WrappingSub};
 
 use crate::{
     instruction::{
-        unwrap_operands, Immediate, RegisterOrMemory16, RegisterOrMemory32,
-        RegisterOrMemory8, Operands, EffectiveAddress,
+        unwrap_operands, EffectiveAddress, Immediate, Operands, RegisterOrMemory16,
+        RegisterOrMemory32, RegisterOrMemory8,
     },
     memory::Memory,
     register::{Register16, Register32, Register8, Registers, WithCarry},
@@ -393,38 +393,56 @@ impl Cpu {
     }
 
     pub(crate) fn pop_ds(&mut self, operands: &Operands) {
-        let _ds = unwrap_operands!(operands, &Register16);
-        todo!()
+        let ds = unwrap_operands!(operands, &Register16);
+        let popped = self.memory.read16(self.registers.esp).unwrap();
+        self.registers.shrink_stack(2);
+        ds.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_es(&mut self, operands: &Operands) {
-        let _es = unwrap_operands!(operands, &Register16);
-        todo!()
+        let es = unwrap_operands!(operands, &Register16);
+        let popped = self.memory.read16(self.registers.esp).unwrap();
+        self.registers.shrink_stack(2);
+        es.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_ss(&mut self, operands: &Operands) {
-        let _ss = unwrap_operands!(operands, &Register16);
-        todo!()
+        let ss = unwrap_operands!(operands, &Register16);
+        let popped = self.memory.read16(self.registers.esp).unwrap();
+        self.registers.shrink_stack(2);
+        ss.write(&mut self.registers, popped);
     }
 
     pub(crate) fn push_cs(&mut self, operands: &Operands) {
-        let _cs = unwrap_operands!(operands, &Register16);
-        todo!()
+        let cs = unwrap_operands!(operands, &Register16);
+        self.registers.grow_stack(2);
+        self.memory
+            .write16(self.registers.esp, cs.read(&mut self.registers))
+            .unwrap();
     }
 
     pub(crate) fn push_ds(&mut self, operands: &Operands) {
-        let _ds = unwrap_operands!(operands, &Register16);
-        todo!()
+        let ds = unwrap_operands!(operands, &Register16);
+        self.registers.grow_stack(2);
+        self.memory
+            .write16(self.registers.esp, ds.read(&mut self.registers))
+            .unwrap();
     }
 
     pub(crate) fn push_es(&mut self, operands: &Operands) {
-        let _es = unwrap_operands!(operands, &Register16);
-        todo!()
+        let es = unwrap_operands!(operands, &Register16);
+        self.registers.grow_stack(2);
+        self.memory
+            .write16(self.registers.esp, es.read(&mut self.registers))
+            .unwrap();
     }
 
     pub(crate) fn push_ss(&mut self, operands: &Operands) {
-        let _ss = unwrap_operands!(operands, &Register16);
-        todo!()
+        let ss = unwrap_operands!(operands, &Register16);
+        self.registers.grow_stack(2);
+        self.memory
+            .write16(self.registers.esp, ss.read(&mut self.registers))
+            .unwrap();
     }
 
     /// Integer subtraction with borrow. Adds the source and the carry flag, and subtracts the
@@ -631,7 +649,6 @@ mod tests {
             }
         };
     }
-
 
     // https://stackoverflow.com/questions/8965923/carry-overflow-subtraction-in-x86#8982549
     //       A                   B                   A + B              Flags
@@ -975,7 +992,6 @@ mod tests {
         cpu.mov_reg32_rm32(&operands!("eax", "ebx"));
         assert_eq!(cpu.registers.get_eax(), 2);
     }
-
 
     #[test]
     fn or() {

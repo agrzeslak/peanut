@@ -777,6 +777,14 @@ impl Registers {
         self.esp.set_low_16(value);
     }
 
+    pub fn grow_stack(&mut self, num_bytes: u32) {
+        self.esp -= num_bytes;
+    }
+
+    pub fn shrink_stack(&mut self, num_bytes: u32) {
+        self.esp += num_bytes;
+    }
+
     pub fn read32(&self, register: &Register32) -> u32 {
         use Register32::*;
         match register {
