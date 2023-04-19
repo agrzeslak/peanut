@@ -777,12 +777,12 @@ impl Registers {
         self.esp.set_low_16(value);
     }
 
-    pub fn grow_stack(&mut self, num_bytes: u32) {
-        self.esp -= num_bytes;
+    pub fn grow_stack(&mut self, size: &Size) {
+        self.esp -= *size as u32 / 8;
     }
 
-    pub fn shrink_stack(&mut self, num_bytes: u32) {
-        self.esp += num_bytes;
+    pub fn shrink_stack(&mut self, size: &Size) {
+        self.esp += *size as u32 / 8;
     }
 
     pub fn read32(&self, register: &Register32) -> u32 {
@@ -925,6 +925,25 @@ mod tests {
     #[test]
     fn edx_get_and_set() {
         test_abcd_register_accessors!(d);
+    }
+
+    #[test]
+    fn grow_and_shrink_stack() {
+        let mut registers = Registers::default();
+        registers.esp = 100;
+
+        registers.grow_stack(&Size::Byte);
+        assert_eq!(registers.esp, 99);
+        registers.grow_stack(&Size::Word);
+        assert_eq!(registers.esp, 97);
+        registers.grow_stack(&Size::Dword);
+        assert_eq!(registers.esp, 93);
+        registers.shrink_stack(&Size::Byte);
+        assert_eq!(registers.esp, 94);
+        registers.shrink_stack(&Size::Word);
+        assert_eq!(registers.esp, 96);
+        registers.shrink_stack(&Size::Dword);
+        assert_eq!(registers.esp, 100);
     }
 
     mod eflags {

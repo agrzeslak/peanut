@@ -5,7 +5,7 @@ use num_traits::{FromPrimitive, PrimInt, WrappingAdd, WrappingSub};
 use crate::{
     instruction::{
         unwrap_operands, EffectiveAddress, Immediate, Operands, RegisterOrMemory16,
-        RegisterOrMemory32, RegisterOrMemory8,
+        RegisterOrMemory32, RegisterOrMemory8, Size,
     },
     memory::Memory,
     register::{Register16, Register32, Register8, Registers, WithCarry},
@@ -395,27 +395,27 @@ impl Cpu {
     pub(crate) fn pop_ds(&mut self, operands: &Operands) {
         let ds = unwrap_operands!(operands, &Register16);
         let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(2);
+        self.registers.shrink_stack(&Size::Dword);
         ds.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_es(&mut self, operands: &Operands) {
         let es = unwrap_operands!(operands, &Register16);
         let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(2);
+        self.registers.shrink_stack(&Size::Dword);
         es.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_ss(&mut self, operands: &Operands) {
         let ss = unwrap_operands!(operands, &Register16);
         let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(2);
+        self.registers.shrink_stack(&Size::Dword);
         ss.write(&mut self.registers, popped);
     }
 
     pub(crate) fn push_cs(&mut self, operands: &Operands) {
         let cs = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(2);
+        self.registers.grow_stack(&Size::Dword);
         self.memory
             .write16(self.registers.esp, cs.read(&mut self.registers))
             .unwrap();
@@ -423,7 +423,7 @@ impl Cpu {
 
     pub(crate) fn push_ds(&mut self, operands: &Operands) {
         let ds = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(2);
+        self.registers.grow_stack(&Size::Dword);
         self.memory
             .write16(self.registers.esp, ds.read(&mut self.registers))
             .unwrap();
@@ -431,7 +431,7 @@ impl Cpu {
 
     pub(crate) fn push_es(&mut self, operands: &Operands) {
         let es = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(2);
+        self.registers.grow_stack(&Size::Dword);
         self.memory
             .write16(self.registers.esp, es.read(&mut self.registers))
             .unwrap();
@@ -439,7 +439,7 @@ impl Cpu {
 
     pub(crate) fn push_ss(&mut self, operands: &Operands) {
         let ss = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(2);
+        self.registers.grow_stack(&Size::Dword);
         self.memory
             .write16(self.registers.esp, ss.read(&mut self.registers))
             .unwrap();

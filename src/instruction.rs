@@ -1405,7 +1405,7 @@ impl TryFrom<&NasmStr<'_>> for OperandType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Size {
     Byte = 8,
     Word = 16,
