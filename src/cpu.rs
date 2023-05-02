@@ -406,20 +406,17 @@ impl Cpu {
         self.memory.read32(self.registers.esp).unwrap()
     }
 
-    pub(crate) fn pop_ds(&mut self, operands: &Operands) {
-        let _ds = unwrap_operands!(operands, &Register16);
+    pub(crate) fn pop_ds(&mut self, _operands: &Operands) {
         let popped = self.pop16();
         self.registers.ds = popped;
     }
 
-    pub(crate) fn pop_es(&mut self, operands: &Operands) {
-        let _es = unwrap_operands!(operands, &Register16);
+    pub(crate) fn pop_es(&mut self, _operands: &Operands) {
         let popped = self.pop16();
         self.registers.es = popped;
     }
 
-    pub(crate) fn pop_ss(&mut self, operands: &Operands) {
-        let _ss = unwrap_operands!(operands, &Register16);
+    pub(crate) fn pop_ss(&mut self, _operands: &Operands) {
         let popped = self.pop16();
         self.registers.ss = popped;
     }
@@ -450,23 +447,19 @@ impl Cpu {
         self.memory.write32(self.registers.esp, value).unwrap();
     }
 
-    pub(crate) fn push_cs(&mut self, operands: &Operands) {
-        let _cs = unwrap_operands!(operands, &Register16);
+    pub(crate) fn push_cs(&mut self, _operands: &Operands) {
         self.push16(self.registers.cs);
     }
 
-    pub(crate) fn push_ds(&mut self, operands: &Operands) {
-        let _ds = unwrap_operands!(operands, &Register16);
+    pub(crate) fn push_ds(&mut self, _operands: &Operands) {
         self.push16(self.registers.ds);
     }
 
-    pub(crate) fn push_es(&mut self, operands: &Operands) {
-        let _es = unwrap_operands!(operands, &Register16);
+    pub(crate) fn push_es(&mut self, _operands: &Operands) {
         self.push16(self.registers.es);
     }
 
-    pub(crate) fn push_ss(&mut self, operands: &Operands) {
-        let _ss = unwrap_operands!(operands, &Register16);
+    pub(crate) fn push_ss(&mut self, _operands: &Operands) {
         self.push16(self.registers.ss);
     }
 
