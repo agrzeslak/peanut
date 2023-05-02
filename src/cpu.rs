@@ -407,18 +407,15 @@ impl Cpu {
     }
 
     pub(crate) fn pop_ds(&mut self, _operands: &Operands) {
-        let popped = self.pop16();
-        self.registers.ds = popped;
+        self.registers.ds = self.pop16();
     }
 
     pub(crate) fn pop_es(&mut self, _operands: &Operands) {
-        let popped = self.pop16();
-        self.registers.es = popped;
+        self.registers.es = self.pop16();
     }
 
     pub(crate) fn pop_ss(&mut self, _operands: &Operands) {
-        let popped = self.pop16();
-        self.registers.ss = popped;
+        self.registers.ss = self.pop16();
     }
 
     pub(crate) fn pop_reg16(&mut self, operands: &Operands) {
