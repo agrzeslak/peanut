@@ -407,21 +407,21 @@ impl Cpu {
     }
 
     pub(crate) fn pop_ds(&mut self, operands: &Operands) {
-        let ds = unwrap_operands!(operands, &Register16);
+        let _ds = unwrap_operands!(operands, &Register16);
         let popped = self.pop16();
-        ds.write(&mut self.registers, popped);
+        self.registers.ds = popped;
     }
 
     pub(crate) fn pop_es(&mut self, operands: &Operands) {
-        let es = unwrap_operands!(operands, &Register16);
+        let _es = unwrap_operands!(operands, &Register16);
         let popped = self.pop16();
-        es.write(&mut self.registers, popped);
+        self.registers.es = popped;
     }
 
     pub(crate) fn pop_ss(&mut self, operands: &Operands) {
-        let ss = unwrap_operands!(operands, &Register16);
+        let _ss = unwrap_operands!(operands, &Register16);
         let popped = self.pop16();
-        ss.write(&mut self.registers, popped);
+        self.registers.ss = popped;
     }
 
     pub(crate) fn pop_reg16(&mut self, operands: &Operands) {
@@ -451,23 +451,23 @@ impl Cpu {
     }
 
     pub(crate) fn push_cs(&mut self, operands: &Operands) {
-        let cs = unwrap_operands!(operands, &Register16);
-        self.push16(cs.read(&self.registers));
+        let _cs = unwrap_operands!(operands, &Register16);
+        self.push16(self.registers.cs);
     }
 
     pub(crate) fn push_ds(&mut self, operands: &Operands) {
-        let ds = unwrap_operands!(operands, &Register16);
-        self.push16(ds.read(&self.registers));
+        let _ds = unwrap_operands!(operands, &Register16);
+        self.push16(self.registers.ds);
     }
 
     pub(crate) fn push_es(&mut self, operands: &Operands) {
-        let es = unwrap_operands!(operands, &Register16);
-        self.push16(es.read(&self.registers));
+        let _es = unwrap_operands!(operands, &Register16);
+        self.push16(self.registers.es);
     }
 
     pub(crate) fn push_ss(&mut self, operands: &Operands) {
-        let ss = unwrap_operands!(operands, &Register16);
-        self.push16(ss.read(&self.registers));
+        let _ss = unwrap_operands!(operands, &Register16);
+        self.push16(self.registers.ss);
     }
 
     pub(crate) fn push_reg16(&mut self, operands: &Operands) {
