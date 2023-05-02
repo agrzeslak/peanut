@@ -392,87 +392,92 @@ impl Cpu {
         rm32.write(self, result).unwrap();
     }
 
+    /// Pops a 16-bit (WORD) value off the stack, adjusting the stack pointer as required. Panics
+    /// if 16-bit value cannot be read from the location in memory pointed to by ESP.
+    fn pop16(&mut self) -> u16 {
+        self.registers.shrink_stack(&Size::Word);
+        self.memory.read16(self.registers.esp).unwrap()
+    }
+
+    /// Pops a 32-bit (DWORD) value off the stack, adjusting the stack pointer as required. Panics
+    /// if 32-bit value cannot be read from the location in memory pointed to by ESP.
+    fn pop32(&mut self) -> u32 {
+        self.registers.shrink_stack(&Size::Dword);
+        self.memory.read32(self.registers.esp).unwrap()
+    }
+
     pub(crate) fn pop_ds(&mut self, operands: &Operands) {
         let ds = unwrap_operands!(operands, &Register16);
-        let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(&Size::Word);
+        let popped = self.pop16();
         ds.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_es(&mut self, operands: &Operands) {
         let es = unwrap_operands!(operands, &Register16);
-        let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(&Size::Word);
+        let popped = self.pop16();
         es.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_ss(&mut self, operands: &Operands) {
         let ss = unwrap_operands!(operands, &Register16);
-        let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(&Size::Word);
+        let popped = self.pop16();
         ss.write(&mut self.registers, popped);
-    }
-
-    pub(crate) fn push_cs(&mut self, operands: &Operands) {
-        let cs = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(&Size::Word);
-        self.memory
-            .write16(self.registers.esp, cs.read(&self.registers))
-            .unwrap();
-    }
-
-    pub(crate) fn push_ds(&mut self, operands: &Operands) {
-        let ds = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(&Size::Word);
-        self.memory
-            .write16(self.registers.esp, ds.read(&self.registers))
-            .unwrap();
-    }
-
-    pub(crate) fn push_es(&mut self, operands: &Operands) {
-        let es = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(&Size::Word);
-        self.memory
-            .write16(self.registers.esp, es.read(&self.registers))
-            .unwrap();
-    }
-
-    pub(crate) fn push_ss(&mut self, operands: &Operands) {
-        let ss = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(&Size::Word);
-        self.memory
-            .write16(self.registers.esp, ss.read(&self.registers))
-            .unwrap();
-    }
-
-    pub(crate) fn push_reg16(&mut self, operands: &Operands) {
-        let reg16 = unwrap_operands!(operands, &Register16);
-        self.registers.grow_stack(&Size::Word);
-        self.memory
-            .write16(self.registers.esp, reg16.read(&self.registers))
-            .unwrap();
-    }
-
-    pub(crate) fn push_reg32(&mut self, operands: &Operands) {
-        let reg32 = unwrap_operands!(operands, &Register32);
-        self.registers.grow_stack(&Size::Dword);
-        self.memory
-            .write32(self.registers.esp, reg32.read(&self.registers))
-            .unwrap();
     }
 
     pub(crate) fn pop_reg16(&mut self, operands: &Operands) {
         let reg16 = unwrap_operands!(operands, &Register16);
-        let popped = self.memory.read16(self.registers.esp).unwrap();
-        self.registers.shrink_stack(&Size::Word);
+        let popped = self.pop16();
         reg16.write(&mut self.registers, popped);
     }
 
     pub(crate) fn pop_reg32(&mut self, operands: &Operands) {
         let reg32 = unwrap_operands!(operands, &Register32);
-        let popped = self.memory.read32(self.registers.esp).unwrap();
-        self.registers.shrink_stack(&Size::Dword);
+        let popped = self.pop32();
         reg32.write(&mut self.registers, popped);
+    }
+
+    /// Pushes a 16-bit (WORD) value onto the stack, adjusting the stack pointer as required. Panics
+    /// if a 16-bit value cannot be written into memory at the index pointed to by ESP.
+    fn push16(&mut self, value: u16) {
+        self.registers.grow_stack(&Size::Word);
+        self.memory.write16(self.registers.esp, value).unwrap();
+    }
+
+    /// Pushes a 32-bit (DWORD) value onto the stack, adjusting the stack pointer as required.
+    /// Panics if a 32-bit value cannot be written into memory at the index pointed to by ESP.
+    fn push32(&mut self, value: u32) {
+        self.registers.grow_stack(&Size::Dword);
+        self.memory.write32(self.registers.esp, value).unwrap();
+    }
+
+    pub(crate) fn push_cs(&mut self, operands: &Operands) {
+        let cs = unwrap_operands!(operands, &Register16);
+        self.push16(cs.read(&self.registers));
+    }
+
+    pub(crate) fn push_ds(&mut self, operands: &Operands) {
+        let ds = unwrap_operands!(operands, &Register16);
+        self.push16(ds.read(&self.registers));
+    }
+
+    pub(crate) fn push_es(&mut self, operands: &Operands) {
+        let es = unwrap_operands!(operands, &Register16);
+        self.push16(es.read(&self.registers));
+    }
+
+    pub(crate) fn push_ss(&mut self, operands: &Operands) {
+        let ss = unwrap_operands!(operands, &Register16);
+        self.push16(ss.read(&self.registers));
+    }
+
+    pub(crate) fn push_reg16(&mut self, operands: &Operands) {
+        let reg16 = unwrap_operands!(operands, &Register16);
+        self.push16(reg16.read(&self.registers));
+    }
+
+    pub(crate) fn push_reg32(&mut self, operands: &Operands) {
+        let reg32 = unwrap_operands!(operands, &Register32);
+        self.push32(reg32.read(&self.registers));
     }
 
     /// Integer subtraction with borrow. Adds the source and the carry flag, and subtracts the
@@ -1081,5 +1086,33 @@ mod tests {
             ZF = false,
             PF = false
         );
+    }
+
+    #[test]
+    fn pop() {
+        let mut cpu = Cpu::default();
+        cpu.registers.esp = 128;
+
+        cpu.memory.write16(130, u16::MAX).unwrap();
+        assert_eq!(cpu.pop16(), u16::MAX);
+        assert_eq!(cpu.registers.esp, 130);
+
+        cpu.memory.write32(134, u32::MAX).unwrap();
+        assert_eq!(cpu.pop32(), u32::MAX);
+        assert_eq!(cpu.registers.esp, 134);
+    }
+
+    #[test]
+    fn push() {
+        let mut cpu = Cpu::default();
+        cpu.registers.esp = 128;
+
+        cpu.push16(u16::MAX);
+        assert_eq!(cpu.registers.esp, 126);
+        assert_eq!(cpu.memory.read16(126).unwrap(), u16::MAX);
+
+        cpu.push32(u32::MAX);
+        assert_eq!(cpu.registers.esp, 122);
+        assert_eq!(cpu.memory.read32(122).unwrap(), u32::MAX);
     }
 }
